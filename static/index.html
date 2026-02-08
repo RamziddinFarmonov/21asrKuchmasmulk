@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Ko'chmas Mulk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .media-preview img, .media-preview video { max-width: 180px; margin: 5px; border-radius: 8px; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 font-sans">
+    <div class="max-w-6xl mx-auto bg-white p-8 rounded-2xl shadow-xl">
+        <h1 class="text-4xl font-bold text-center text-blue-800 mb-10">Admin Panel</h1>
+
+        <!-- Yangi qo'shish -->
+        <div class="mb-12">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Yangi obyekt qo'shish</h2>
+            <form id="add-form" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <select name="type" class="border p-3 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="sale">Sotuv</option>
+                    <option value="rent">Ijara</option>
+                </select>
+                <input type="text" name="mulk_turi" placeholder="Mulk turi" class="border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+                <input type="text" name="joylashuv" placeholder="Joylashuv" class="border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+                <input type="text" name="narx" placeholder="Narx" class="border p-3 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+                <textarea name="izoh" placeholder="Izoh" class="border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 col-span-2" rows="3"></textarea>
+                <input type="file" name="media" multiple accept="image/*,video/*" class="border p-3 rounded-lg col-span-2">
+                <button type="submit" class="md:col-span-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium">
+                    Saqlash
+                </button>
+            </form>
+        </div>
+
+        <!-- Obyektlar ro'yxati -->
+        <div>
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Barcha obyektlar</h2>
+            <div id="objects-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_ID = "8135506421"; // o'zingizniki bilan almashtiring
+
+        async function loadObjects() {
+            const res = await fetch('http://127.0.0.1:5000/objects');
+            const data = await res.json();
+            const list = document.getElementById('objects-list');
+            list.innerHTML = '';
+            data.forEach(obj => {
+                const card = document.createElement('div');
+                card.className = 'bg-gray-50 p-6 rounded-xl shadow border hover:shadow-lg transition';
+                card.innerHTML = `
+                    <h3 class="font-bold text-xl text-gray-900">${obj.mulk_turi}</h3>
+                    <p class="text-sm text-gray-600 mt-1">${obj.type} • ${obj.joylashuv}</p>
+                    <p class="font-medium text-lg mt-2">${obj.narx}</p>
+                    <p class="text-sm text-gray-700 mt-3">${obj.izoh || 'Izoh yoq'}</p>
+                    <div class="media-preview mt-4 flex flex-wrap gap-3">
+                        ${obj.media.map(m => {
+                            const isVideo = m.endsWith('.mp4') || m.endsWith('.mov');
+                            return isVideo 
+                                ? `<video src="/uploads/${m}" controls class="w-40 h-28 object-cover rounded-lg"></video>`
+                                : `<img src="/uploads/${m}" class="w-40 h-28 object-cover rounded-lg">`;
+                        }).join('')}
+                    </div>
+                    <button onclick="deleteObject(${obj.id})" class="mt-5 bg-red-500 text-white px-5 py-2 rounded-lg hover:bg-red-600 transition">
+                        O'chirish
+                    </button>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        document.getElementById('add-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            await fetch('http://127.0.0.1:5000/objects', {
+                method: 'POST',
+                headers: { 'X-Telegram-User-Id': ADMIN_ID },
+                body: formData
+            });
+            loadObjects();
+            e.target.reset();
+        });
+
+        async function deleteObject(id) {
+            if (!confirm("Rostan o'chirmoqchimisiz?")) return;
+            await fetch(`http://127.0.0.1:5000/objects/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-Telegram-User-Id': ADMIN_ID }
+            });
+            loadObjects();
+        }
+
+        loadObjects();
+    </script>
+</body>
+</html>
