@@ -12,8 +12,6 @@ __pycache__/
 *.db
 objects.db
 
-# Environment variables
-.env
 
 # IDEs
 .vscode/
