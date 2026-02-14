@@ -1,0 +1,29 @@
+# render.yaml - TELEGRAM BOT UCHUN
+
+services:
+  - type: web
+    name: telegram-auksion-bot
+    runtime: python
+    plan: free
+    
+    # Python versiyasi (3.11 - barqaror)
+    buildCommand: |
+      python3.11 -m pip install --upgrade pip
+      python3.11 -m pip install --no-cache-dir -r requirements.txt
+    
+    startCommand: python3.11 main.py
+    
+    # Environment variables
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        sync: false
+    
+    # Auto-deploy
+    autoDeploy: true
+    
+    # Health check
+    healthCheckPath: /
