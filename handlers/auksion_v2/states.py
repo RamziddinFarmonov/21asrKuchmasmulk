@@ -10,6 +10,8 @@ class AuksionStatesV2(StatesGroup):
     # Qidiruv
     searching = State()  # Qidiruv so'zini kiritish
     
-    # Ariza berish
-    application_comment = State()  # Ariza izohini kiritish
-    application_confirm = State()  # Arizani tasdiqlash
+    # Ariza berish - TO'LIQ
+    application_name = State()  # Ism va familiya
+    application_phone = State()  # Telefon raqam
+    application_comment = State()  # Qo'shimcha izoh
+    application_confirm = State()  # Tasdiqlash

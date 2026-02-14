@@ -82,26 +82,78 @@ class Lot:
     
     @staticmethod
     def from_api_data(data: dict) -> 'Lot':
-        """API javobidan Lot obyektini yaratish"""
+        """API javobidan Lot obyektini yaratish - TO'LIQ VERSIYA"""
         from .utils import parse_date
         
-        return Lot(
+        # Asosiy lot yaratish
+        lot = Lot(
             id=data.get('id', 0),
             name=data.get('name', ''),
             lot_number=data.get('lot_number', ''),
             start_price=float(data.get('start_price', 0)),
             current_price=float(data.get('current_price', data.get('start_price', 0))),
-            min_increment=float(data.get('min_increment', data.get('step_price', 0))),
-            status=data.get('status', 'upcoming'),
-            category=data.get('category', 'other'),
-            auction_start=parse_date(data.get('auction_date_str')),
-            description=data.get('description', ''),
-            location=data.get('location', ''),
+            min_increment=float(data.get('step_summa', data.get('min_increment', 0))),
+            status=data.get('lot_statuses_name', {}).get('name_uz', 'upcoming') if isinstance(data.get('lot_statuses_name'), dict) else data.get('status', 'upcoming'),
+            category=data.get('confiscant_categories_name', {}).get('name_uz', 'other') if isinstance(data.get('confiscant_categories_name'), dict) else data.get('category', 'other'),
+            auction_start=parse_date(data.get('start_time_str', data.get('auction_date_str'))),
+            description=data.get('additional_info', data.get('description', '')),
+            location=data.get('joylashgan_manzil', data.get('location', '')),
             bids_count=data.get('bids_count', 0),
             participants_count=data.get('participants_count', 0),
-            estimated_value=float(data.get('estimated_value', 0)) if data.get('estimated_value') else None,
-            properties=data.get('properties', {}),
+            estimated_value=float(data.get('baholangan_narx', data.get('estimated_value', 0))) if data.get('baholangan_narx') or data.get('estimated_value') else None,
         )
+        
+        # Properties - confiscant_details_list dan
+        if 'confiscant_details_list' in data and isinstance(data['confiscant_details_list'], list):
+            properties = {}
+            for detail in data['confiscant_details_list']:
+                if isinstance(detail, dict):
+                    name_dict = detail.get('name', {})
+                    name = name_dict.get('name_uz', '') if isinstance(name_dict, dict) else str(detail.get('name', ''))
+                    value = detail.get('detail_value_string', detail.get('detail_value', ''))
+                    
+                    if name and value and str(value).strip() not in ['', '-', 'null', 'None']:
+                        # Maxsus xususiyatlar
+                        if 'maydoni' in name.lower():
+                            properties['area'] = value
+                        elif 'qurilgan yili' in name.lower() or 'year' in name.lower():
+                            properties['year_built'] = value
+                        elif 'balansda saqlovchi' in name.lower() and 'nomi' in name.lower():
+                            properties['balance_holder'] = value
+                        elif 'viloyat' in name.lower() or 'region' in name.lower():
+                            properties['region'] = value
+                        elif 'tuman' in name.lower() or 'district' in name.lower():
+                            properties['district'] = value
+                        else:
+                            # Boshqa barcha xususiyatlar
+                            short_name = name[:50] if len(name) > 50 else name
+                            properties[short_name] = str(value)[:200] if len(str(value)) > 200 else str(value)
+            
+            lot.properties = properties
+        
+        # Joylashuv - to'ldirish
+        if not lot.location:
+            region = data.get('region_name', {}).get('name_uz', '') if isinstance(data.get('region_name'), dict) else ''
+            area = data.get('area_name', {}).get('name_uz', '') if isinstance(data.get('area_name'), dict) else ''
+            address = data.get('joylashgan_manzil', '')
+            
+            parts = [p for p in [region, area, address] if p]
+            if parts:
+                lot.location = ", ".join(parts)
+        
+        # RASMLAR - confiscant_images_list dan!
+        if 'confiscant_images_list' in data and isinstance(data['confiscant_images_list'], list):
+            for img_data in data['confiscant_images_list']:
+                if isinstance(img_data, dict):
+                    file_hash = img_data.get('file_hash')
+                    if file_hash:
+                        image = LotImage(
+                            file_hash=file_hash,
+                            file_name=img_data.get('description', img_data.get('image_positions_name', ''))
+                        )
+                        lot.images.append(image)
+        
+        return lot
 
 
 @dataclass

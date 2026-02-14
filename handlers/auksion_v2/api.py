@@ -37,6 +37,7 @@ class AuksionAPIV2:
         categories_id: int,
         page: int = 1,
         per_page: int = ITEMS_PER_PAGE,
+        region_id: int = None,
     ) -> List[Lot]:
         """
         Kategoriya bo'yicha lotlarni olish (E-auksion.uz format)
@@ -46,6 +47,7 @@ class AuksionAPIV2:
             categories_id: confiscant_categories_id (masalan: 3, 27, 46)
             page: Sahifa raqami
             per_page: Sahifadagi elementlar soni
+            region_id: Viloyat ID (agar kerak bo'lsa)
         """
         session = await self._get_session()
         
@@ -54,7 +56,7 @@ class AuksionAPIV2:
             "sort_type": 1,
             "confiscant_groups_id": groups_id,
             "confiscant_categories_id": categories_id,
-            "regions_id": None,
+            "regions_id": region_id,  # YANGI - viloyat filtri
             "areas_id": None,
             "auction_type": 0,
             "current_page": page,
@@ -76,7 +78,7 @@ class AuksionAPIV2:
             "zz_md5": "d7431a0a032c91d10d97ceac59425f9d"
         }
         
-        logger.info(f"📤 API Request: groups_id={groups_id}, categories_id={categories_id}")
+        logger.info(f"📤 API Request: groups_id={groups_id}, categories_id={categories_id}, region_id={region_id}")
         
         try:
             async with session.post(f"{API_BASE_URL}/lots", json=payload) as response:
@@ -108,6 +110,21 @@ class AuksionAPIV2:
         except Exception as e:
             logger.error(f"❌ Lotlarni olishda xato: {e}", exc_info=True)
             return []
+    
+    async def get_lots_by_category_and_region(
+        self,
+        groups_id: str,
+        categories_id: int,
+        region_id: int = None,
+        page: int = 1
+    ) -> List[Lot]:
+        """Viloyat bilan filter - sodda wrapper"""
+        return await self.get_lots_by_category(
+            groups_id=groups_id,
+            categories_id=categories_id,
+            region_id=region_id,
+            page=page
+        )
     
     async def get_lot_detail(self, lot_id: int) -> Optional[Lot]:
         """Lot batafsil ma'lumotlarini olish"""

@@ -19,6 +19,8 @@ from handlers.kochmas_mulk_sotib_olish import router as kochmas_sotib_olish_rout
 from handlers.ijaraga_berish import router as ijaraga_berish_router
 from handlers.ijaralar_olish import router as ijaralar_olish_router
 from handlers.admin import router as admin_router
+from handlers.auksion_v2.region_filter import router as region_filter_router
+from handlers.auksion_v2.search import router as search_router
 
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
@@ -37,6 +39,8 @@ dp.include_router(ijaraga_berish_router)
 dp.include_router(ijaralar_olish_router)
 dp.include_router(admin_router)
 dp.include_router(auksion_v2_router)
+dp.include_router(region_filter_router)
+dp.include_router(search_router)
 
 async def main():
     print("Bot ishga tushmoqda...")
