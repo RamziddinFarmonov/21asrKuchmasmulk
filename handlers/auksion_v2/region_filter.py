@@ -35,20 +35,20 @@ REGIONS = {
 # Region ID mapping
 REGION_IDS = {
     "all": None,
-    "toshkent_sh": 13,
-    "toshkent": 14,
-    "samarqand": 11,
-    "buxoro": 2,
-    "andijon": 1,
-    "fargona": 3,
+    "toshkent_sh": 1,
+    "toshkent": 2,
+    "samarqand": 3,
+    "buxoro": 11,
+    "andijon": 7,
+    "fargona": 6,
     "namangan": 8,
-    "qashqadaryo": 10,
-    "surxondaryo": 12,
+    "qashqadaryo": 9,
+    "surxondaryo": 10,
     "jizzax": 4,
-    "sirdaryo": 11,
-    "navoiy": 9,
-    "xorazm": 15,
-    "qoraqalpog": 16
+    "sirdaryo": 5,
+    "navoiy": 12,
+    "xorazm": 14,
+    "qoraqalpog": 13
 }
 
 

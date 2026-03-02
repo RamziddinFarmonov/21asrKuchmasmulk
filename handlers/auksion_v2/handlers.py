@@ -1,11 +1,14 @@
 """
 Auksion V2 - Asosiy Handlers
-Hierarchik kategoriyalar bilan
+YANGILANGAN:
+  - Lot batafsil ma'lumotlari qaytdi (narx, tavsif, xususiyatlar)
+  - Rasm + caption, keyin to'liq matn
+  - "Mening arizalarim" bo'limi
+  - Narx kuzatish
 """
 import logging
 import os
 from datetime import datetime
-from typing import Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto
@@ -13,40 +16,27 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 
 from .categories import MAIN_CATEGORIES, SUB_CATEGORIES, CATEGORY_FILTERS, get_breadcrumb
-from .config import (
-    ITEMS_PER_PAGE,
-    MSG_NO_LOTS,
-    MSG_LOT_NOT_FOUND,
-    MSG_ERROR,
-    MSG_APPLICATION_SENT,
-    APPLICATION_TEMPLATE,
-)
-from .models import Lot, UserFavorite, storage
+from .config import ITEMS_PER_PAGE, MSG_LOT_NOT_FOUND, MSG_ERROR
+from .models import Lot, UserFavorite, UserApplication, storage
 from .api import api_client
-from .utils import (
-    format_lot_detail,
-    format_price,
-    paginate_list,
-)
+from .utils import format_price, paginate_list, clean_text
 from .keyboards import (
     get_auksion_main_keyboard,
     get_subcategory_keyboard,
     get_lots_list_keyboard,
     get_lot_detail_keyboard,
     get_image_navigation_keyboard,
-    get_application_confirm_keyboard,
     get_favorites_keyboard,
-    get_search_keyboard,
     get_back_to_main_keyboard,
+    get_my_applications_keyboard,
 )
 from .states import AuksionStatesV2
 
 logger = logging.getLogger(__name__)
 router = Router(name="auksion_v2")
 
-# Admin ID'lar (.env dan)
 ADMIN_IDS = os.getenv("ADMIN_USER_IDS", "").split(",")
-ADMIN_IDS = [int(id.strip()) for id in ADMIN_IDS if id.strip().isdigit()]
+ADMIN_IDS = [int(i.strip()) for i in ADMIN_IDS if i.strip().isdigit()]
 
 
 # ============================================================================
@@ -55,86 +45,63 @@ ADMIN_IDS = [int(id.strip()) for id in ADMIN_IDS if id.strip().isdigit()]
 
 @router.message(Command("auksion"))
 async def cmd_auksion(message: Message):
-    """
-    /auksion komandasi - Auksion menyusini ochish
-    """
-    await show_auksion_main_menu(message)
+    await _show_main_menu(message)
 
 
 @router.callback_query(F.data == "auk2:menu")
 async def callback_auksion_menu(callback: CallbackQuery):
-    """Auksion asosiy menyusiga qaytish"""
     await callback.message.edit_text(
-        "🏛 <b>E-AUKSION || Lotlar - Yangi lotlar</b>\n\n"
-        "Kategoriyani tanlang:",
-        reply_markup=get_auksion_main_keyboard()
+        "🏛 <b>E-AUKSION || Lotlar - Yangi lotlar</b>\n\nKategoriyani tanlang:",
+        reply_markup=get_auksion_main_keyboard(),
+        parse_mode="HTML"
     )
     await callback.answer()
 
 
-async def show_auksion_main_menu(message: Message):
-    """Auksion asosiy menyusini ko'rsatish"""
+async def _show_main_menu(message: Message):
     await message.answer(
-        "🏛 <b>E-AUKSION || Lotlar - Yangi lotlar</b>\n\n"
-        "Kategoriyani tanlang:",
-        reply_markup=get_auksion_main_keyboard()
+        "🏛 <b>E-AUKSION || Lotlar - Yangi lotlar</b>\n\nKategoriyani tanlang:",
+        reply_markup=get_auksion_main_keyboard(),
+        parse_mode="HTML"
     )
+
+# Alias — handlers.common da shu nom bilan import qilinadi
+show_auksion_main_menu = _show_main_menu
 
 
 # ============================================================================
-# KATEGORIYALAR (1-DARAJA)
+# KATEGORIYALAR
 # ============================================================================
 
 @router.callback_query(F.data.startswith("auk2:cat:"))
 async def callback_main_category(callback: CallbackQuery):
-    """
-    Asosiy kategoriya tanlandi
-    Sub-kategoriyalarni ko'rsatish
-    """
     main_cat = callback.data.split(":")[-1]
-    
     if main_cat not in MAIN_CATEGORIES:
-        await callback.answer("❌ Kategoriya topilmadi", show_alert=True)
+        await callback.answer("Kategoriya topilmadi", show_alert=True)
         return
-    
-    cat_name = MAIN_CATEGORIES[main_cat]
     breadcrumb = get_breadcrumb(main_cat)
-    
-    text = f"📂 <b>{breadcrumb}</b>\n\n"
-    text += "Bo'limni tanlang:"
-    
-    keyboard = get_subcategory_keyboard(main_cat)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(
+        f"📂 <b>{breadcrumb}</b>\n\nBo'limni tanlang:",
+        reply_markup=get_subcategory_keyboard(main_cat),
+        parse_mode="HTML"
+    )
     await callback.answer()
 
 
-# ============================================================================
-# SUB-KATEGORIYALAR (2-DARAJA)
-# ============================================================================
 @router.callback_query(F.data.startswith("auk2:sub:"))
 async def callback_show_subcategory(callback: CallbackQuery):
-    """Sub-kategoriya -> VILOYAT FILTRIGA YO'NALTIRISH"""
     parts = callback.data.split(":")
-    main_cat = parts[2]
-    sub_cat = parts[3]
-    
-    # region_filter.py ga yo'naltirish
+    main_cat, sub_cat = parts[2], parts[3]
     from .region_filter import get_region_filter_keyboard
-    from .categories import get_breadcrumb
-    
     breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    
-    text = (
-        f"📂 <b>{breadcrumb}</b>\n\n"
-        "📍 <b>Viloyatni tanlang:</b>\n\n"
-        "<i>Sizning viloyatingizdagi lotlarni ko'rsatamiz</i>"
+    await callback.message.edit_text(
+        f"📂 <b>{breadcrumb}</b>\n\n📍 <b>Viloyatni tanlang:</b>\n\n"
+        "<i>Sizning viloyatingizdagi lotlarni ko'rsatamiz</i>",
+        reply_markup=get_region_filter_keyboard(main_cat, sub_cat),
+        parse_mode="HTML"
     )
-    
-    keyboard = get_region_filter_keyboard(main_cat, sub_cat)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
+
 
 # ============================================================================
 # SAHIFALASH
@@ -142,111 +109,173 @@ async def callback_show_subcategory(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("auk2:page:"))
 async def callback_lots_page(callback: CallbackQuery):
-    """Lotlar sahifasini almashtirish"""
     parts = callback.data.split(":")
-    main_cat = parts[2]
-    sub_cat = parts[3]
-    page = int(parts[4])
-    
-    # Filter data
+    main_cat, sub_cat, page = parts[2], parts[3], int(parts[4])
     filter_data = CATEGORY_FILTERS.get(sub_cat)
     if not filter_data:
-        await callback.answer("❌ Xato", show_alert=True)
+        await callback.answer("Xato", show_alert=True)
         return
-    
-    # YANGI: To'g'ridan-to'g'ri API'dan kerakli sahifani olish
+    await callback.message.edit_text("⏳ Yuklanmoqda...")
     lots = await api_client.get_lots_by_category(
         groups_id=filter_data["groups_id"],
         categories_id=filter_data["categories_id"],
-        page=page  # To'g'ri sahifa raqami
+        page=page
     )
-    
     if not lots:
         await callback.answer("Bu sahifada lotlar yo'q", show_alert=True)
         return
-    
-    # Matn
     breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    text = f"📂 <b>{breadcrumb}</b>\n\n"
-    text += f"📄 Sahifa: {page}\n"
-    text += f"📦 Bu sahifada: {len(lots)} ta lot\n\n"
-    text += "Lotni tanlang:"
-    
-    # Keyboard - lotlarni to'g'ridan-to'g'ri ko'rsatish
-    keyboard = get_lots_list_keyboard(lots, main_cat, sub_cat, page, 999)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
-    
-    # Matn
-    breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    text = f"📂 <b>{breadcrumb}</b>\n\n"
-    text += f"📦 Jami: {len(lots)} ta lot\n\n"
-    text += "Lotni tanlang:"
-    
-    # Keyboard
-    keyboard = get_lots_list_keyboard(page_lots, main_cat, sub_cat, page, total_pages)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(
+        f"📂 <b>{breadcrumb}</b>\n\n📄 Sahifa: {page} | 📦 {len(lots)} ta lot\n\nLotni tanlang:",
+        reply_markup=get_lots_list_keyboard(lots, main_cat, sub_cat, page, 999),
+        parse_mode="HTML"
+    )
     await callback.answer()
 
 
 # ============================================================================
-# LOT BATAFSIL MA'LUMOTLARI
+# LOT BATAFSIL — RASM + TO'LIQ MA'LUMOT
 # ============================================================================
 
 @router.callback_query(F.data.startswith("auk2:view:"))
 async def callback_view_lot(callback: CallbackQuery):
-    """Lotni batafsil ko'rish"""
     parts = callback.data.split(":")
     lot_id = int(parts[2])
     main_cat = parts[3] if len(parts) > 3 else "kochmas_mulk"
-    sub_cat = parts[4] if len(parts) > 4 else "kop_qavatli"
-    
-    # Yuklanish xabari - rasm/matn muammosini hal qilish
-    loading_msg = None
+    sub_cat  = parts[4] if len(parts) > 4 else "kop_qavatli"
+
     try:
         loading_msg = await callback.message.edit_text("⏳ Ma'lumot yuklanmoqda...")
-    except:
-        # Agar rasm bo'lsa yoki edit qilib bo'lmasa
+    except Exception:
         try:
             await callback.message.delete()
-        except:
+        except Exception:
             pass
         loading_msg = await callback.message.answer("⏳ Ma'lumot yuklanmoqda...")
-    
+
     try:
-        # API dan batafsil ma'lumot
         lot = await api_client.get_lot_detail(lot_id)
-        
         if not lot:
-            await loading_msg.edit_text(
-                MSG_LOT_NOT_FOUND,
-                reply_markup=get_back_to_main_keyboard()
-            )
+            await loading_msg.edit_text(MSG_LOT_NOT_FOUND, reply_markup=get_back_to_main_keyboard())
             await callback.answer()
             return
-        
-        # Breadcrumb
+
         breadcrumb = get_breadcrumb(main_cat, sub_cat)
-        
-        # Matn
-        text = f"📂 <b>{breadcrumb}</b>\n\n"
-        text += format_lot_detail(lot)
-        
-        # Keyboard
-        keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
-        
-        await loading_msg.edit_text(text, reply_markup=keyboard)
+        full_text  = f"📂 <b>{breadcrumb}</b>\n\n" + _build_full_detail(lot)
+        keyboard   = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
+
+        if lot.images:
+            caption = _build_short_caption(lot, breadcrumb)
+            try:
+                await loading_msg.delete()
+            except Exception:
+                pass
+            # Rasm yuborish
+            try:
+                await callback.message.answer_photo(
+                    photo=lot.images[0].get_url(),
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+            except Exception as img_err:
+                logger.warning(f"Rasm yuklanmadi: {img_err}")
+            # Batafsil matn (keyboard shu yerda)
+            await callback.message.answer(full_text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await loading_msg.edit_text(full_text, reply_markup=keyboard, parse_mode="HTML")
+
         await callback.answer()
-        
+
     except Exception as e:
-        logger.error(f"Lot {lot_id} ma'lumotlarini olishda xato: {e}")
-        await callback.message.edit_text(
-            MSG_ERROR,
-            reply_markup=get_back_to_main_keyboard()
-        )
+        logger.error(f"Lot {lot_id} ko'rishda xato: {e}", exc_info=True)
+        try:
+            await loading_msg.edit_text(MSG_ERROR, reply_markup=get_back_to_main_keyboard())
+        except Exception:
+            pass
         await callback.answer()
+
+
+def _build_short_caption(lot: Lot, breadcrumb: str) -> str:
+    """Rasm uchun qisqa caption (max 1024 belgi)"""
+    lines = [f"📂 <b>{breadcrumb}</b>\n"]
+    name = lot.name[:100] + ("..." if len(lot.name) > 100 else "")
+    lines.append(f"<b>{name}</b>")
+    lines.append("")
+    if lot.lot_number:
+        lines.append(f"📦 Lot: <code>#{lot.lot_number}</code>")
+    if lot.location:
+        lines.append(f"📍 {lot.location[:80]}")
+    price = lot.current_price or lot.start_price
+    if price:
+        lines.append(f"💰 Narx: <b>{format_price(price)}</b>")
+    if lot.images and len(lot.images) > 1:
+        lines.append(f"\n📸 Jami {len(lot.images)} ta rasm")
+    caption = "\n".join(lines)
+    return caption[:1020] + "..." if len(caption) > 1020 else caption
+
+
+def _build_full_detail(lot: Lot) -> str:
+    """Lotning TO'LIQ batafsil matni"""
+    text = f"<b>{lot.name}</b>\n\n"
+
+    if lot.lot_number:
+        text += f"📦 <b>Lot raqami:</b> <code>#{lot.lot_number}</code>\n\n"
+
+    if lot.location:
+        text += f"📍 <b>Joylashuv:</b> {lot.location}\n\n"
+
+    # Narx bloki
+    text += "💰 <b>NARX MA'LUMOTLARI:</b>\n"
+    if lot.start_price and lot.start_price > 0:
+        text += f"├─ Boshlang'ich narx: {format_price(lot.start_price)}\n"
+    price = lot.current_price or lot.start_price
+    text += f"├─ Joriy narx: <b>{format_price(price)}</b>\n"
+    if lot.min_increment and lot.min_increment > 0:
+        text += f"├─ Minimal oshirish: {format_price(lot.min_increment)}\n"
+    if lot.estimated_value and lot.estimated_value > 0:
+        text += f"└─ Baholangan qiymati: {format_price(lot.estimated_value)}\n"
+    text += "\n"
+
+    # Vaqt
+    if lot.auction_start:
+        text += "⏰ <b>VAQT:</b>\n"
+        text += f"└─ Boshlanish: {lot.auction_start.strftime('%d.%m.%Y %H:%M')}\n\n"
+
+    # Tavsif
+    if lot.description:
+        clean = clean_text(lot.description)
+        if clean:
+            text += "📋 <b>TAVSIF:</b>\n"
+            text += (clean[:600] + "...\n\n") if len(clean) > 600 else (clean + "\n\n")
+
+    # Xususiyatlar
+    if lot.properties and isinstance(lot.properties, dict):
+        text += "🔍 <b>XUSUSIYATLAR:</b>\n"
+        key_labels = {
+            'area': 'Maydoni', 'rooms': 'Xonalar soni',
+            'floor': 'Qavat', 'total_floors': 'Jami qavatlar',
+            'address': 'Manzil', 'region': 'Viloyat',
+            'district': 'Tuman', 'cadastral_number': 'Kadastr raqami',
+            'purpose': 'Maqsadi', 'year_built': 'Qurilgan yili',
+            'condition': 'Holati', 'size': 'Hajmi',
+            'balance_holder': 'Balans saqlovchi',
+        }
+        shown = 0
+        for key, label in key_labels.items():
+            if key in lot.properties and lot.properties[key]:
+                text += f"• {label}: {lot.properties[key]}\n"
+                shown += 1
+        for key, value in lot.properties.items():
+            if key not in key_labels and value and shown < 20:
+                text += f"• {key}: {value}\n"
+                shown += 1
+        text += "\n"
+
+    # Rasmlar
+    text += f"📸 <b>Rasmlar:</b> {len(lot.images)} ta\n\n" if lot.images else "📸 <b>Rasmlar:</b> Mavjud emas\n\n"
+
+    text += f"🔗 <a href='https://e-auksion.uz/lot-view?lot_id={lot.id}'>E-auksion.uz da ko'rish</a>"
+    return text
 
 
 # ============================================================================
@@ -255,87 +284,50 @@ async def callback_view_lot(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("auk2:images:"))
 async def callback_view_images(callback: CallbackQuery):
-    """Lot rasmlarini ko'rish"""
     parts = callback.data.split(":")
-    lot_id = int(parts[2])
-    index = int(parts[3])
+    lot_id  = int(parts[2])
+    index   = int(parts[3])
     main_cat = parts[4] if len(parts) > 4 else "kochmas_mulk"
-    sub_cat = parts[5] if len(parts) > 5 else "kop_qavatli"
-    
+    sub_cat  = parts[5] if len(parts) > 5 else "kop_qavatli"
+
     lot = storage.get_lot(lot_id)
-    
     if not lot or not lot.images:
-        await callback.answer("❌ Rasmlar topilmadi", show_alert=True)
+        await callback.answer("Rasmlar topilmadi", show_alert=True)
         return
-    
     if index >= len(lot.images):
-        await callback.answer("❌ Rasm topilmadi", show_alert=True)
+        await callback.answer("Rasm topilmadi", show_alert=True)
         return
-    
-    # Rasmni ko'rsatish
-    await show_lot_image(callback.message, lot, index, main_cat, sub_cat, edit=True)
-    await callback.answer()
 
-
-async def show_lot_image(
-    message: Message,
-    lot: Lot,
-    index: int,
-    main_cat: str,
-    sub_cat: str,
-    edit: bool = False
-):
-    """
-    Lotning rasmini ko'rsatish
-    
-    Args:
-        message: Xabar obyekti
-        lot: Lot
-        index: Rasm indexi
-        main_cat: Asosiy kategoriya
-        sub_cat: Sub-kategoriya
-        edit: Xabarni tahrirlash (True) yoki yangi yuborish (False)
-    """
-    if not lot.images or index >= len(lot.images):
-        return
-    
-    image = lot.images[index]
-    image_url = image.get_url()
-    
+    image     = lot.images[index]
     breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    
-    caption = (
+    caption   = (
         f"📂 <b>{breadcrumb}</b>\n\n"
         f"📸 <b>Rasm {index + 1}/{len(lot.images)}</b>\n\n"
-        f"📦 {lot.name}\n"
-        f"💰 {format_price(lot.current_price)}"
+        f"<b>{lot.name[:80]}</b>\n"
+        f"💰 {format_price(lot.current_price or lot.start_price)}"
     )
-    
     keyboard = get_image_navigation_keyboard(lot.id, index, len(lot.images), main_cat, sub_cat)
-    
+
     try:
-        if edit and message.photo:
-            # Rasmni tahrirlash
-            await message.edit_media(
-                media=InputMediaPhoto(media=image_url, caption=caption),
+        if callback.message.photo:
+            await callback.message.edit_media(
+                media=InputMediaPhoto(media=image.get_url(), caption=caption, parse_mode="HTML"),
                 reply_markup=keyboard
             )
         else:
-            # Yangi rasm yuborish
-            if edit:
-                await message.delete()
-            
-            await message.answer_photo(
-                photo=image_url,
-                caption=caption,
-                reply_markup=keyboard
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            await callback.message.answer_photo(
+                photo=image.get_url(), caption=caption,
+                reply_markup=keyboard, parse_mode="HTML"
             )
     except Exception as e:
-        logger.error(f"Rasmni yuborishda xato: {e}")
-        await message.answer(
-            f"❌ Rasmni yuklashda xatolik.\n\n{caption}",
-            reply_markup=keyboard
-        )
+        logger.error(f"Galereya xato: {e}")
+        await callback.message.answer(caption, reply_markup=keyboard, parse_mode="HTML")
+
+    await callback.answer()
 
 
 # ============================================================================
@@ -344,355 +336,393 @@ async def show_lot_image(
 
 @router.callback_query(F.data.startswith("auk2:fav:"))
 async def callback_add_favorite(callback: CallbackQuery):
-    """Sevimliga qo'shish"""
     parts = callback.data.split(":")
-    lot_id = int(parts[2])
-    main_cat = parts[3]
-    sub_cat = parts[4]
-    
+    lot_id, main_cat, sub_cat = int(parts[2]), parts[3], parts[4]
     lot = storage.get_lot(lot_id)
     if not lot:
-        await callback.answer("❌ Lot topilmadi", show_alert=True)
+        await callback.answer("Lot topilmadi", show_alert=True)
         return
-    
-    # Sevimliga qo'shish
-    favorite = UserFavorite(
-        user_id=callback.from_user.id,
-        lot_id=lot_id,
-        added_at=datetime.now()
-    )
-    storage.add_favorite(favorite)
-    
+    storage.add_favorite(UserFavorite(user_id=callback.from_user.id, lot_id=lot_id, added_at=datetime.now()))
     await callback.answer("⭐ Sevimliga qo'shildi!", show_alert=True)
-    
-    # Keyboard yangilash
-    breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    text = f"📂 <b>{breadcrumb}</b>\n\n"
-    text += format_lot_detail(lot)
-    
     keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    if callback.message.photo:
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+    else:
+        breadcrumb = get_breadcrumb(main_cat, sub_cat)
+        await callback.message.edit_text(
+            f"📂 <b>{breadcrumb}</b>\n\n" + _build_full_detail(lot),
+            reply_markup=keyboard, parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("auk2:unfav:"))
 async def callback_remove_favorite(callback: CallbackQuery):
-    """Sevimlilardan o'chirish"""
     parts = callback.data.split(":")
-    lot_id = int(parts[2])
-    main_cat = parts[3]
-    sub_cat = parts[4]
-    
+    lot_id, main_cat, sub_cat = int(parts[2]), parts[3], parts[4]
     storage.remove_favorite(callback.from_user.id, lot_id)
-    
     await callback.answer("🗑 Sevimlilardan o'chirildi", show_alert=True)
-    
-    # Keyboard yangilash
     lot = storage.get_lot(lot_id)
     if lot:
-        breadcrumb = get_breadcrumb(main_cat, sub_cat)
-        text = f"📂 <b>{breadcrumb}</b>\n\n"
-        text += format_lot_detail(lot)
-        
         keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        if callback.message.photo:
+            await callback.message.edit_reply_markup(reply_markup=keyboard)
+        else:
+            breadcrumb = get_breadcrumb(main_cat, sub_cat)
+            await callback.message.edit_text(
+                f"📂 <b>{breadcrumb}</b>\n\n" + _build_full_detail(lot),
+                reply_markup=keyboard, parse_mode="HTML"
+            )
 
 
 @router.callback_query(F.data == "auk2:favorites")
 async def callback_show_favorites(callback: CallbackQuery):
-    """Sevimlilarni ko'rsatish"""
     user_id = callback.from_user.id
     favorites = storage.get_user_favorites(user_id)
-    
     if not favorites:
         await callback.message.edit_text(
-            "⭐ <b>SEVIMLILAR</b>\n\n"
-            "Sizda hali sevimli lotlar yo'q.\n\n"
-            "Lotlarni ko'rib, sevimliga qo'shing!",
-            reply_markup=get_back_to_main_keyboard()
+            "⭐ <b>SEVIMLILAR</b>\n\nSizda hali sevimli lotlar yo'q.\n\nLotlarni ko'rib, ⭐ ni bosing!",
+            reply_markup=get_back_to_main_keyboard(), parse_mode="HTML"
         )
         await callback.answer()
         return
-    
-    # Sevimli lotlarni olish
-    lots = []
-    for fav in favorites:
-        lot = storage.get_lot(fav.lot_id)
-        if lot:
-            lots.append(lot)
-    
+    lots = [storage.get_lot(f.lot_id) for f in favorites]
+    lots = [l for l in lots if l]
     if not lots:
         await callback.message.edit_text(
-            "⭐ <b>SEVIMLILAR</b>\n\n"
-            "Sevimli lotlar topilmadi.",
-            reply_markup=get_back_to_main_keyboard()
+            "⭐ <b>SEVIMLILAR</b>\n\nSevimli lotlar topilmadi.",
+            reply_markup=get_back_to_main_keyboard(), parse_mode="HTML"
         )
         await callback.answer()
         return
-    
-    # Sahifalash
     page_lots, total_pages, _, _ = paginate_list(lots, 1, ITEMS_PER_PAGE)
-    
-    text = f"⭐ <b>SEVIMLILAR</b>\n\n"
-    text += f"📦 Jami: {len(lots)} ta lot\n\n"
-    text += "Lotni tanlang:"
-    
-    keyboard = get_favorites_keyboard(page_lots, 1, total_pages)
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(
+        f"⭐ <b>SEVIMLILAR</b>\n\n📦 Jami: {len(lots)} ta lot\n\nLotni tanlang:",
+        reply_markup=get_favorites_keyboard(page_lots, 1, total_pages), parse_mode="HTML"
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("auk2:view_fav:"))
 async def callback_view_favorite_lot(callback: CallbackQuery):
-    """Sevimli lotni ko'rish"""
     lot_id = int(callback.data.split(":")[-1])
-    
-    lot = storage.get_lot(lot_id)
-    
+    lot = storage.get_lot(lot_id) or await api_client.get_lot_detail(lot_id)
     if not lot:
-        # API dan qayta olishga harakat
-        lot = await api_client.get_lot_detail(lot_id)
-    
-    if not lot:
-        await callback.answer("❌ Lot topilmadi", show_alert=True)
+        await callback.answer("Lot topilmadi", show_alert=True)
         return
-    
-    # Lotni ko'rsatish (default kategoriya bilan)
-    text = "⭐ <b>SEVIMLILAR</b>\n\n"
-    text += format_lot_detail(lot)
-    
     keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, "kochmas_mulk", "kop_qavatli")
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    if lot.images:
+        caption = _build_short_caption(lot, "⭐ Sevimlilar")
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer_photo(photo=lot.images[0].get_url(), caption=caption, parse_mode="HTML")
+        await callback.message.answer(
+            "⭐ <b>Sevimlilar</b>\n\n" + _build_full_detail(lot),
+            reply_markup=keyboard, parse_mode="HTML"
+        )
+    else:
+        await callback.message.edit_text(
+            "⭐ <b>Sevimlilar</b>\n\n" + _build_full_detail(lot),
+            reply_markup=keyboard, parse_mode="HTML"
+        )
     await callback.answer()
 
+
 # ============================================================================
-# ARIZA YUBORISH - TO'LIQ TIZIM
+# MENING ARIZALARIM
+# ============================================================================
+
+@router.callback_query(F.data == "auk2:my_applications")
+async def callback_my_applications(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    applications = storage.get_user_applications(user_id)
+
+    if not applications:
+        await callback.message.edit_text(
+            "📋 <b>MENING ARIZALARIM</b>\n\n"
+            "Siz hali hech qanday ariza yubormagansiz.\n\n"
+            "Lotni tanlang va <b>🙋 Qiziqdim</b> tugmasini bosing!",
+            reply_markup=get_back_to_main_keyboard(), parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        f"📋 <b>MENING ARIZALARIM</b>\n\nJami: {len(applications)} ta ariza\n\nLotni tanlang:",
+        reply_markup=get_my_applications_keyboard(applications),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("auk2:app_detail:"))
+async def callback_application_detail(callback: CallbackQuery):
+    lot_id  = int(callback.data.split(":")[-1])
+    user_id = callback.from_user.id
+    app = storage.get_application(user_id, lot_id)
+    if not app:
+        await callback.answer("Ariza topilmadi", show_alert=True)
+        return
+
+    await callback.message.edit_text("⏳ Joriy narx tekshirilmoqda...")
+
+    # API dan joriy narxni olish
+    lot = await api_client.get_lot_detail(lot_id)
+    if lot:
+        app.current_price = lot.current_price or lot.start_price
+        storage.update_application_price(lot_id, app.current_price)
+
+    # Narx o'zgarishi
+    if app.price_changed():
+        diff = app.price_diff()
+        if diff > 0:
+            price_block = (
+                f"\n📈 <b>Narx OSHDI!</b>\n"
+                f"├─ Ariza vaqtida: {format_price(app.lot_price)}\n"
+                f"├─ Hozir: <b>{format_price(app.current_price)}</b>\n"
+                f"└─ Farq: <b>+{format_price(diff)}</b>\n"
+            )
+        else:
+            price_block = (
+                f"\n📉 <b>Narx TUSHDI!</b>\n"
+                f"├─ Ariza vaqtida: {format_price(app.lot_price)}\n"
+                f"├─ Hozir: <b>{format_price(app.current_price)}</b>\n"
+                f"└─ Farq: <b>{format_price(diff)}</b>\n"
+            )
+    else:
+        price_block = f"\n💰 <b>Narx:</b> {format_price(app.current_price)}\n<i>(O'zgarmagan)</i>\n"
+
+    status_map = {
+        "pending":   "🕐 Kutilmoqda",
+        "contacted": "📞 Admin bog'landi",
+        "done":      "✅ Yakunlandi",
+        "cancelled": "❌ Bekor qilindi",
+    }
+
+    text = (
+        "📋 <b>ARIZA TAFSILOTI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📦 <b>Ob'ekt:</b>\n<i>{app.lot_name[:120]}</i>\n"
+        f"{price_block}\n"
+        f"👤 <b>Ism:</b> {app.name}\n"
+        f"📞 <b>Telefon:</b> {app.phone}\n"
+        f"📅 <b>Yuborilgan:</b> {app.applied_at.strftime('%d.%m.%Y %H:%M')}\n"
+        f"📊 <b>Holat:</b> {status_map.get(app.status, '🕐 Kutilmoqda')}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 E-auksion.uz da ko'rish", url=f"https://e-auksion.uz/lot-view?lot_id={lot_id}")],
+        [InlineKeyboardButton(text="🔄 Narxni yangilash", callback_data=f"auk2:app_detail:{lot_id}")],
+        [InlineKeyboardButton(text="🔙 Arizalarim", callback_data="auk2:my_applications")],
+    ])
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+# ============================================================================
+# ARIZA YUBORISH
 # ============================================================================
 
 @router.callback_query(F.data.startswith("auk2:apply:"))
 async def callback_apply_start(callback: CallbackQuery, state: FSMContext):
-    """Ariza yuborishni boshlash - ISM VA FAMILIYA"""
-    parts = callback.data.split(":")
-    lot_id = int(parts[2])
-    main_cat = parts[3]
-    sub_cat = parts[4]
-    
+    parts   = callback.data.split(":")
+    lot_id  = int(parts[2])
+    main_cat = parts[3] if len(parts) > 3 else ""
+    sub_cat  = parts[4] if len(parts) > 4 else ""
+
     lot = storage.get_lot(lot_id)
     if not lot:
-        await callback.answer("❌ Lot topilmadi", show_alert=True)
+        await callback.answer("Lot topilmadi", show_alert=True)
         return
-    
-    # State'ga saqlash
+
     await state.update_data(
-        apply_lot_id=lot_id,
-        apply_main_cat=main_cat,
-        apply_sub_cat=sub_cat
+        apply_lot_id=lot_id, apply_main_cat=main_cat, apply_sub_cat=sub_cat,
+        apply_lot_name=lot.name, apply_lot_price=lot.current_price or lot.start_price,
     )
     await state.set_state(AuksionStatesV2.application_name)
-    
+
     await callback.message.answer(
-        "📝 <b>ARIZA YUBORISH - 1/3</b>\n\n"
-        f"📦 Lot: {lot.name}\n"
-        f"💰 Narx: {format_price(lot.current_price or lot.start_price)}\n\n"
-        "👤 Iltimos, <b>ism va familiyangizni</b> kiriting:\n\n"
-        "Misol: Abbos Aliyev"
+        "🏛 <b>AUKSION XIZMATI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📦 <b>Siz qiziqtirgan ob'ekt:</b>\n<i>{lot.name[:120]}</i>\n\n"
+        f"💰 <b>Joriy narx:</b> {format_price(lot.current_price or lot.start_price)}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👨‍💼 <b>Hurmatli mijoz!</b>\n\n"
+        "Siz ushbu ob'ektga qiziqish bildirdingiz. "
+        "Arizangizni qabul qilganimizdan so'ng, "
+        "<b>mutaxassis adminimiz</b> siz bilan bog'lanib:\n\n"
+        "✅ Ob'ekt haqida to'liq ma'lumot beradi\n"
+        "✅ <b>Sizning nomingizdan</b> auksion jarayonida qatnashadi\n"
+        "✅ Eng qulay narxda ob'ektni qo'lga kiritishga yordam beradi\n"
+        "✅ Barcha hujjat va rasmiyatchilikni hal qiladi\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📝 <b>1/2 — Ism va familiyangizni yozing:</b>\n\n"
+        "<i>Misol: Abbos Aliyev</i>",
+        parse_mode="HTML"
     )
     await callback.answer()
 
 
 @router.message(AuksionStatesV2.application_name)
 async def process_application_name(message: Message, state: FSMContext):
-    """Ism va familiyani qayta ishlash"""
     name = message.text.strip()
-    
     if len(name) < 3:
-        await message.answer("❌ Ism juda qisqa. Iltimos, to'liq ism va familiyangizni kiriting.")
+        await message.answer(
+            "❌ Ism juda qisqa!\n\nTo'liq ism va familiyangizni kiriting.\n<i>Misol: Abbos Aliyev</i>",
+            parse_mode="HTML"
+        )
         return
-    
-    # Saqlash
     await state.update_data(apply_name=name)
     await state.set_state(AuksionStatesV2.application_phone)
-    
-    # Telefon raqam so'rash
+
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-    
     await message.answer(
-        "📝 <b>ARIZA YUBORISH - 2/3</b>\n\n"
-        "📞 Telefon raqamingizni yuboring:\n\n"
-        "• Tugmani bosib yuborish\n"
-        "• Yoki qo'lda yozish: +998901234567",
-        reply_markup=keyboard
+        f"✅ Rahmat, <b>{name}</b>!\n\n"
+        "📞 <b>2/2 — Telefon raqamingizni yuboring:</b>\n\n"
+        "• Tugmani bosib yuborish <i>(tavsiya)</i>\n"
+        "• Yoki qo'lda: <code>+998901234567</code>",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)],
+                [KeyboardButton(text="✏️ Qo'lda yozish")]
+            ],
+            resize_keyboard=True, one_time_keyboard=True
+        ),
+        parse_mode="HTML"
     )
 
 
 @router.message(AuksionStatesV2.application_phone, F.contact)
-async def process_application_phone_contact(message: Message, state: FSMContext):
-    """Telefon raqam (contact orqali)"""
+async def process_phone_contact(message: Message, state: FSMContext):
     phone = message.contact.phone_number
-    
-    # Saqlash
-    await state.update_data(apply_phone=phone)
-    await state.set_state(AuksionStatesV2.application_comment)
-    
-    # Izoh so'rash
+    if not phone.startswith('+'):
+        phone = '+' + phone
+    await _finish_application(message, state, phone)
+
+
+@router.message(AuksionStatesV2.application_phone, F.text == "✏️ Qo'lda yozish")
+async def process_manual_phone_request(message: Message):
     from aiogram.types import ReplyKeyboardRemove
-    
     await message.answer(
-        "📝 <b>ARIZA YUBORISH - 3/3</b>\n\n"
-        "💬 Qo'shimcha izoh yozing yoki \"yo'q\" deb yuboring:",
-        reply_markup=ReplyKeyboardRemove()
+        "📞 Telefon raqamingizni kiriting:\n\n<code>+998901234567</code>",
+        reply_markup=ReplyKeyboardRemove(), parse_mode="HTML"
     )
 
 
 @router.message(AuksionStatesV2.application_phone)
-async def process_application_phone_text(message: Message, state: FSMContext):
-    """Telefon raqam (qo'lda yozilgan)"""
+async def process_phone_text(message: Message, state: FSMContext):
     phone = message.text.strip()
-    
-    # Telefon raqamni tekshirish
-    if not phone.startswith('+') and not phone.startswith('998'):
-        await message.answer("❌ Telefon raqam noto'g'ri. +998 bilan boshlang. Misol: +998901234567")
-        return
-    
-    # Saqlash
-    await state.update_data(apply_phone=phone)
-    await state.set_state(AuksionStatesV2.application_comment)
-    
-    # Izoh so'rash
-    from aiogram.types import ReplyKeyboardRemove
-    
-    await message.answer(
-        "📝 <b>ARIZA YUBORISH - 3/3</b>\n\n"
-        "💬 Qo'shimcha izoh yozing yoki \"yo'q\" deb yuboring:",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
-
-@router.message(AuksionStatesV2.application_comment)
-async def process_application_comment(message: Message, state: FSMContext):
-    """Izohni qayta ishlash va tasdiqlash"""
-    data = await state.get_data()
-    lot_id = data.get("apply_lot_id")
-    name = data.get("apply_name")
-    phone = data.get("apply_phone")
-    
-    lot = storage.get_lot(lot_id)
-    if not lot:
-        await message.answer("❌ Xatolik. Qaytadan boshlang.")
-        await state.clear()
-        return
-    
-    # Izoh
-    comment = message.text.strip()
-    if comment.lower() == "yo'q":
-        comment = "—"
-    
-    await state.update_data(apply_comment=comment)
-    
-    # Tasdiqlash
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Ha, yuborish", callback_data=f"auk2:apply_send:{lot_id}"),
-            InlineKeyboardButton(text="❌ Bekor qilish", callback_data="auk2:apply_cancel")
-        ]
-    ])
-    
-    text = (
-        "📋 <b>ARIZANI TASDIQLASH</b>\n\n"
-        f"📦 <b>Lot:</b> {lot.name}\n"
-        f"💰 <b>Narx:</b> {format_price(lot.current_price or lot.start_price)}\n\n"
-        f"👤 <b>Ism:</b> {name}\n"
-        f"📞 <b>Telefon:</b> {phone}\n"
-        f"💬 <b>Izoh:</b> {comment}\n\n"
-        "Arizani yuborasizmi?"
-    )
-    
-    await message.answer(text, reply_markup=keyboard)
-
-
-@router.callback_query(F.data.startswith("auk2:apply_send:"))
-async def callback_send_application(callback: CallbackQuery, state: FSMContext):
-    """Arizani admin'ga yuborish"""
-    import os
-    from datetime import datetime
-    
-    lot_id = int(callback.data.split(":")[-1])
-    
-    data = await state.get_data()
-    name = data.get("apply_name")
-    phone = data.get("apply_phone")
-    comment = data.get("apply_comment", "—")
-    
-    lot = storage.get_lot(lot_id)
-    if not lot:
-        await callback.answer("❌ Xatolik", show_alert=True)
-        await state.clear()
-        return
-    
-    # Foydalanuvchi ma'lumotlari
-    user = callback.from_user
-    
-    # Admin'ga xabar
-    ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-    
-    if ADMIN_CHAT_ID:
-        admin_text = (
-            "🆕 <b>YANGI ARIZA!</b>\n\n"
-            "👤 <b>Foydalanuvchi:</b>\n"
-            f"├─ ID: {user.id}\n"
-            f"├─ Username: @{user.username or '—'}\n"
-            f"├─ Ism: {name}\n"
-            f"└─ Telefon: {phone}\n\n"
-            f"📦 <b>Lot:</b>\n"
-            f"├─ ID: {lot.id}\n"
-            f"├─ Nomi: {lot.name}\n"
-            f"├─ Narx: {format_price(lot.current_price or lot.start_price)}\n"
-            f"└─ Link: https://e-auksion.uz/lot/{lot.id}\n\n"
-            f"💬 <b>Izoh:</b> {comment}\n\n"
-            f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    if not (phone.startswith('+998') or phone.startswith('998')):
+        await message.answer(
+            "❌ Noto'g'ri format!\n\nFormat: <code>+998901234567</code>\n\nQaytadan kiriting:",
+            parse_mode="HTML"
         )
-        
-        try:
-            await callback.bot.send_message(
-                chat_id=ADMIN_CHAT_ID,
-                text=admin_text
-            )
-            
-            # Foydalanuvchiga tasdiqlash
-            await callback.message.edit_text(
-                "✅ <b>Arizangiz muvaffaqiyatly yuborildi!</b>\n\n"
-                "Tez orada admin siz bilan bog'lanadi.\n\n"
-                f"📦 Lot: {lot.name}\n"
-                f"💰 Narx: {format_price(lot.current_price or lot.start_price)}\n\n"
-                "Rahmat! 🙏"
-            )
-            
-            await callback.answer("✅ Yuborildi!", show_alert=True)
-            
-        except Exception as e:
-            logger.error(f"Admin'ga xabar yuborishda xato: {e}")
-            await callback.answer("❌ Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.", show_alert=True)
-    else:
-        await callback.answer("❌ Admin ID topilmadi. .env faylini tekshiring.", show_alert=True)
-    
+        return
+    if not phone.startswith('+'):
+        phone = '+' + phone
+    await _finish_application(message, state, phone)
+
+
+async def _finish_application(message: Message, state: FSMContext, phone: str):
+    from aiogram.types import ReplyKeyboardRemove
+
+    data      = await state.get_data()
+    lot_id    = data.get("apply_lot_id")
+    lot_name  = data.get("apply_lot_name", "")
+    lot_price = data.get("apply_lot_price", 0)
+    name      = data.get("apply_name", "")
+
+    # Arizani storage ga saqlash
+    storage.add_application(UserApplication(
+        user_id=message.from_user.id, lot_id=lot_id,
+        lot_name=lot_name, lot_price=lot_price, current_price=lot_price,
+        name=name, phone=phone, applied_at=datetime.now(), status="pending",
+    ))
+
+    await message.answer(
+        "✅ <b>Arizangiz muvaffaqiyatli qabul qilindi!</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📦 <b>Ob'ekt:</b> {lot_name[:100]}\n"
+        f"💰 <b>Narx:</b> {format_price(lot_price)}\n"
+        f"👤 <b>Ism:</b> {name}\n"
+        f"📞 <b>Telefon:</b> {phone}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🕐 Adminimiz <b>1-2 soat ichida</b> siz bilan bog'lanadi.\n\n"
+        "📋 Arizangizni <b>«Mening arizalarim»</b> bo'limida kuzatishingiz mumkin.\n\n"
+        "🙏 <b>Ishonchingiz uchun rahmat!</b>",
+        reply_markup=ReplyKeyboardRemove(), parse_mode="HTML"
+    )
+
+    await _send_to_admin(
+        bot=message.bot, user_id=message.from_user.id, username=message.from_user.username,
+        name=name, phone=phone, lot_id=lot_id, lot_name=lot_name, lot_price=lot_price
+    )
     await state.clear()
+
+
+async def _send_to_admin(bot, user_id, username, name, phone, lot_id, lot_name, lot_price):
+    ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+    if not ADMIN_CHAT_ID:
+        logger.error("ADMIN_CHAT_ID topilmadi!")
+        return
+    try:
+        await bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=(
+                "🆕 <b>YANGI ARIZA KELDI!</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "👤 <b>MIJOZ:</b>\n"
+                f"├─ ID: <code>{user_id}</code>\n"
+                f"├─ Username: @{username or '—'}\n"
+                f"├─ Ism: {name}\n"
+                f"└─ Telefon: <code>{phone}</code>\n\n"
+                "📦 <b>OB'EKT:</b>\n"
+                f"├─ Lot ID: <code>{lot_id}</code>\n"
+                f"├─ Nomi: {lot_name[:150]}\n"
+                f"├─ Narx: {format_price(lot_price)}\n"
+                f"└─ Havola: https://e-auksion.uz/lot-view?lot_id={lot_id}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
+                "💬 <i>Iltimos, mijoz bilan tezroq bog'laning!</i>"
+            ),
+            parse_mode="HTML"
+        )
+        logger.info(f"Ariza yuborildi: Lot #{lot_id}, User {user_id}")
+    except Exception as e:
+        logger.error(f"Admin'ga yuborishda xato: {e}")
 
 
 @router.callback_query(F.data == "auk2:apply_cancel")
 async def callback_cancel_application(callback: CallbackQuery, state: FSMContext):
-    """Arizani bekor qilish"""
     await state.clear()
-    await callback.message.edit_text("❌ Ariza bekor qilindi.")
+    await callback.message.edit_text("❌ Ariza bekor qilindi.", reply_markup=get_back_to_main_keyboard())
+    await callback.answer()
+
+# ============================================================================
+# ASOSIY MENYUGA QAYTISH (inline "Bosh menyu" tugmasi)
+# ============================================================================
+
+@router.callback_query(F.data == "main_menu")
+async def callback_to_main_menu(callback: CallbackQuery, state: FSMContext):
+    """Inline 'Bosh menyu' tugmasi - asosiy menyuga qaytish"""
+    await state.clear()
+    try:
+        from utils.keyboards import get_main_menu
+        await callback.message.answer("🏠 Asosiy menyu:", reply_markup=get_main_menu())
+        await callback.message.delete()
+    except Exception:
+        await callback.message.edit_text(
+            "🏠 Asosiy menyuga qaytish uchun /start bosing",
+            reply_markup=None
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "noop")
+async def callback_noop(callback: CallbackQuery):
+    """Hech narsa qilmaydigan callback (sahifa ko'rsatkichi uchun)"""
     await callback.answer()

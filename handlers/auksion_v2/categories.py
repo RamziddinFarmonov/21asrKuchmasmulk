@@ -137,7 +137,7 @@ CATEGORY_FILTERS = {
     "kop_qavatli": {"groups_id": "1", "categories_id": 3},
     "turar_joy_uchastka": {"groups_id": "1", "categories_id": 2},
     "qishloq_yer": {"groups_id": "1", "categories_id": 161},
-    "noturar_joy": {"groups_id": "1", "categories_id": 1},  # Taxmin
+    "noturar_joy": {"groups_id": "1", "categories_id": 1}, 
     "tugallanmagan_kop": {"groups_id": "1", "categories_id": 6},  # Taxmin
     "tugallanmagan_uchastka": {"groups_id": "1", "categories_id": 5},  # Taxmin
     "tugallanmagan_bino": {"groups_id": "1", "categories_id": 4},  # Taxmin

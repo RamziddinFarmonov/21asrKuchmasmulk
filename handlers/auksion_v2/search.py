@@ -22,8 +22,6 @@ def get_search_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔤 Matn bo'yicha", callback_data="search:text")],
         [InlineKeyboardButton(text="🔢 Lot ID bo'yicha", callback_data="search:id")],
-        [InlineKeyboardButton(text="💰 Narx oralig'i", callback_data="search:price")],
-        [InlineKeyboardButton(text="📍 Joylashuv", callback_data="search:location")],
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="auk2:menu")]
     ])
 
@@ -38,8 +36,6 @@ async def callback_show_search(callback: CallbackQuery, state: FSMContext):
         "Qidiruv turini tanlang:\n\n"
         "🔤 <b>Matn:</b> Lot nomida qidirish\n"
         "🔢 <b>ID:</b> Lot raqami bo'yicha\n"
-        "💰 <b>Narx:</b> Narx oralig'i\n"
-        "📍 <b>Joylashuv:</b> Viloyat/tuman"
     )
     
     await callback.message.edit_text(
@@ -82,78 +78,6 @@ async def callback_search_id(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# 3. NARX BO'YICHA QIDIRUV
-@router.callback_query(F.data == "search:price")
-async def callback_search_price(callback: CallbackQuery, state: FSMContext):
-    """Narx oralig'i tanlash"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💵 100M so'mdan kam", callback_data="price:0-100000000")],
-        [InlineKeyboardButton(text="💵 100M - 500M", callback_data="price:100000000-500000000")],
-        [InlineKeyboardButton(text="💵 500M - 1B", callback_data="price:500000000-1000000000")],
-        [InlineKeyboardButton(text="💵 1B - 5B", callback_data="price:1000000000-5000000000")],
-        [InlineKeyboardButton(text="💵 5B dan yuqori", callback_data="price:5000000000-999999999999")],
-        [InlineKeyboardButton(text="✍️ Qo'lda kiritish", callback_data="price:custom")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="auk2:search")]
-    ])
-    
-    await callback.message.edit_text(
-        "🔍 <b>NARX BO'YICHA QIDIRUV</b>\n\n"
-        "Narx oralig'ini tanlang:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("price:"))
-async def callback_price_range(callback: CallbackQuery, state: FSMContext):
-    """Narx oralig'i tanlandi"""
-    price_range = callback.data.split(":")[1]
-    
-    if price_range == "custom":
-        await state.set_state(AuksionStatesV2.searching)
-        await state.update_data(search_type="price_custom")
-        
-        await callback.message.edit_text(
-            "🔍 <b>NARX ORALIG'I</b>\n\n"
-            "Narx oralig'ini kiriting:\n\n"
-            "<i>Format: 100M-500M yoki 1B-5B</i>\n"
-            "<i>Misol: 200M-800M</i>",
-            parse_mode="HTML"
-        )
-        await callback.answer()
-        return
-    
-    # Narx oralig'ini parse qilish
-    min_price, max_price = price_range.split("-")
-    min_price = int(min_price)
-    max_price = int(max_price)
-    
-    await callback.message.edit_text("⏳ Qidirilmoqda...")
-    
-    # Qidiruv
-    lots = await search_by_price(min_price, max_price)
-    
-    await show_search_results(callback.message, lots, f"Narx: {format_price(min_price)} - {format_price(max_price)}")
-    await callback.answer()
-
-
-# 4. JOYLASHUV BO'YICHA
-@router.callback_query(F.data == "search:location")
-async def callback_search_location(callback: CallbackQuery, state: FSMContext):
-    """Joylashuv bo'yicha qidiruv"""
-    await state.set_state(AuksionStatesV2.searching)
-    await state.update_data(search_type="location")
-    
-    await callback.message.edit_text(
-        "🔍 <b>JOYLASHUV BO'YICHA QIDIRUV</b>\n\n"
-        "Viloyat yoki tuman nomini kiriting:\n\n"
-        "<i>Misol: Toshkent, Samarqand, Buxoro, Andijon</i>",
-        parse_mode="HTML"
-    )
-    await callback.answer()
-
-
 # QIDIRUV NATIJALARINI QAYTA ISHLASH
 @router.message(AuksionStatesV2.searching)
 async def process_search_query(message: Message, state: FSMContext):
@@ -178,27 +102,6 @@ async def process_search_query(message: Message, state: FSMContext):
             lots = []
         
         await show_search_results(message, lots, f"ID: #{lot_id}")
-    
-    elif search_type == "price_custom":
-        # Narx (custom)
-        min_price, max_price = parse_price_range(query)
-        if min_price and max_price:
-            lots = await search_by_price(min_price, max_price)
-            await show_search_results(message, lots, f"Narx: {format_price(min_price)} - {format_price(max_price)}")
-        else:
-            await message.answer(
-                "❌ Narx formati noto'g'ri!\n\n"
-                "Format: 100M-500M yoki 1B-5B\n"
-                "Qaytadan kiriting:"
-            )
-            return
-    
-    elif search_type == "location":
-        # Joylashuv bo'yicha
-        lots = await api_client.search_lots(query)
-        # Location filter
-        filtered_lots = [lot for lot in lots if lot.location and query.lower() in lot.location.lower()]
-        await show_search_results(message, filtered_lots, f"Joylashuv: {query}")
     
     else:
         # Matn bo'yicha (default)
@@ -263,39 +166,4 @@ async def search_by_price(min_price: int, max_price: int):
         )
         all_lots.extend(lots)
     
-    # Narx bo'yicha filter
-    filtered = []
-    for lot in all_lots:
-        price = lot.current_price or lot.start_price
-        if min_price <= price <= max_price:
-            filtered.append(lot)
-    
-    return filtered
 
-
-def parse_price_range(query: str) -> tuple:
-    """Narx oralig'ini parse qilish"""
-    query = query.upper().replace(" ", "")
-    
-    # Format: 100M-500M yoki 1B-5B
-    match = re.match(r'(\d+)([MB])?-(\d+)([MB])?', query)
-    if not match:
-        return None, None
-    
-    min_val = int(match.group(1))
-    min_unit = match.group(2) or 'M'
-    max_val = int(match.group(3))
-    max_unit = match.group(4) or 'M'
-    
-    # Million yoki Billion
-    if min_unit == 'B':
-        min_price = min_val * 1_000_000_000
-    else:
-        min_price = min_val * 1_000_000
-    
-    if max_unit == 'B':
-        max_price = max_val * 1_000_000_000
-    else:
-        max_price = max_val * 1_000_000
-    
-    return min_price, max_price

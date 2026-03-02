@@ -1,28 +1,25 @@
 """
 Auksion uchun Database modellari
+YANGILANGAN: UserApplication (Mening arizalarim) qo'shildi
 """
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
 
 
 @dataclass
 class LotImage:
-    """Lot rasmi"""
     file_hash: str
     file_name: Optional[str] = None
     url: Optional[str] = None
-    
+
     def get_url(self) -> str:
-        """Rasm URL'ini olish"""
         from .config import API_IMAGES_URL
         return f"{API_IMAGES_URL}?file_hash={self.file_hash}"
 
 
 @dataclass
 class Lot:
-    """Auksion lot modeli"""
     id: int
     name: str
     lot_number: str
@@ -31,61 +28,29 @@ class Lot:
     min_increment: float
     status: str
     category: str
-    
-    # Sanalar
+
     auction_start: Optional[datetime] = None
     auction_end: Optional[datetime] = None
     created_at: Optional[datetime] = None
-    
-    # Qo'shimcha ma'lumotlar
+
     description: Optional[str] = None
     location: Optional[str] = None
     images: List[LotImage] = field(default_factory=list)
-    
-    # Statistika
+
     bids_count: int = 0
     participants_count: int = 0
     views_count: int = 0
-    
-    # Baho va hujjatlar
+
     estimated_value: Optional[float] = None
     documents: List[str] = field(default_factory=list)
-    
-    # Qo'shimcha
     properties: Dict[str, Any] = field(default_factory=dict)
     winner_id: Optional[int] = None
     is_sold: bool = False
-    
-    def to_dict(self) -> dict:
-        """Dict formatiga o'tkazish"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'lot_number': self.lot_number,
-            'start_price': self.start_price,
-            'current_price': self.current_price,
-            'min_increment': self.min_increment,
-            'status': self.status,
-            'category': self.category,
-            'auction_start': self.auction_start.isoformat() if self.auction_start else None,
-            'auction_end': self.auction_end.isoformat() if self.auction_end else None,
-            'description': self.description,
-            'location': self.location,
-            'bids_count': self.bids_count,
-            'participants_count': self.participants_count,
-            'views_count': self.views_count,
-            'estimated_value': self.estimated_value,
-            'properties': self.properties,
-            'winner_id': self.winner_id,
-            'is_sold': self.is_sold,
-        }
-    
+
     @staticmethod
     def from_api_data(data: dict) -> 'Lot':
-        """API javobidan Lot obyektini yaratish - TO'LIQ VERSIYA"""
         from .utils import parse_date
-        
-        # Asosiy lot yaratish
+
         lot = Lot(
             id=data.get('id', 0),
             name=data.get('name', ''),
@@ -93,228 +58,228 @@ class Lot:
             start_price=float(data.get('start_price', 0)),
             current_price=float(data.get('current_price', data.get('start_price', 0))),
             min_increment=float(data.get('step_summa', data.get('min_increment', 0))),
-            status=data.get('lot_statuses_name', {}).get('name_uz', 'upcoming') if isinstance(data.get('lot_statuses_name'), dict) else data.get('status', 'upcoming'),
-            category=data.get('confiscant_categories_name', {}).get('name_uz', 'other') if isinstance(data.get('confiscant_categories_name'), dict) else data.get('category', 'other'),
+            status=(
+                data.get('lot_statuses_name', {}).get('name_uz', 'upcoming')
+                if isinstance(data.get('lot_statuses_name'), dict)
+                else data.get('status', 'upcoming')
+            ),
+            category=(
+                data.get('confiscant_categories_name', {}).get('name_uz', 'other')
+                if isinstance(data.get('confiscant_categories_name'), dict)
+                else data.get('category', 'other')
+            ),
             auction_start=parse_date(data.get('start_time_str', data.get('auction_date_str'))),
             description=data.get('additional_info', data.get('description', '')),
             location=data.get('joylashgan_manzil', data.get('location', '')),
             bids_count=data.get('bids_count', 0),
             participants_count=data.get('participants_count', 0),
-            estimated_value=float(data.get('baholangan_narx', data.get('estimated_value', 0))) if data.get('baholangan_narx') or data.get('estimated_value') else None,
+            estimated_value=(
+                float(data.get('baholangan_narx', data.get('estimated_value', 0)))
+                if data.get('baholangan_narx') or data.get('estimated_value') else None
+            ),
         )
-        
-        # Properties - confiscant_details_list dan
+
+        # Properties
         if 'confiscant_details_list' in data and isinstance(data['confiscant_details_list'], list):
             properties = {}
             for detail in data['confiscant_details_list']:
                 if isinstance(detail, dict):
                     name_dict = detail.get('name', {})
-                    name = name_dict.get('name_uz', '') if isinstance(name_dict, dict) else str(detail.get('name', ''))
+                    prop_name = (
+                        name_dict.get('name_uz', '') if isinstance(name_dict, dict)
+                        else str(detail.get('name', ''))
+                    )
                     value = detail.get('detail_value_string', detail.get('detail_value', ''))
-                    
-                    if name and value and str(value).strip() not in ['', '-', 'null', 'None']:
-                        # Maxsus xususiyatlar
-                        if 'maydoni' in name.lower():
+                    if prop_name and value and str(value).strip() not in ['', '-', 'null', 'None']:
+                        if 'maydoni' in prop_name.lower():
                             properties['area'] = value
-                        elif 'qurilgan yili' in name.lower() or 'year' in name.lower():
+                        elif 'qurilgan yili' in prop_name.lower():
                             properties['year_built'] = value
-                        elif 'balansda saqlovchi' in name.lower() and 'nomi' in name.lower():
+                        elif 'balansda saqlovchi' in prop_name.lower() and 'nomi' in prop_name.lower():
                             properties['balance_holder'] = value
-                        elif 'viloyat' in name.lower() or 'region' in name.lower():
+                        elif 'viloyat' in prop_name.lower():
                             properties['region'] = value
-                        elif 'tuman' in name.lower() or 'district' in name.lower():
+                        elif 'tuman' in prop_name.lower():
                             properties['district'] = value
                         else:
-                            # Boshqa barcha xususiyatlar
-                            short_name = name[:50] if len(name) > 50 else name
-                            properties[short_name] = str(value)[:200] if len(str(value)) > 200 else str(value)
-            
+                            properties[prop_name[:50]] = str(value)[:200]
             lot.properties = properties
-        
-        # Joylashuv - to'ldirish
+
+        # Joylashuv
         if not lot.location:
             region = data.get('region_name', {}).get('name_uz', '') if isinstance(data.get('region_name'), dict) else ''
-            area = data.get('area_name', {}).get('name_uz', '') if isinstance(data.get('area_name'), dict) else ''
+            area   = data.get('area_name', {}).get('name_uz', '') if isinstance(data.get('area_name'), dict) else ''
             address = data.get('joylashgan_manzil', '')
-            
             parts = [p for p in [region, area, address] if p]
             if parts:
                 lot.location = ", ".join(parts)
-        
-        # RASMLAR - confiscant_images_list dan!
+
+        # Rasmlar
         if 'confiscant_images_list' in data and isinstance(data['confiscant_images_list'], list):
-            for img_data in data['confiscant_images_list']:
-                if isinstance(img_data, dict):
-                    file_hash = img_data.get('file_hash')
-                    if file_hash:
-                        image = LotImage(
-                            file_hash=file_hash,
-                            file_name=img_data.get('description', img_data.get('image_positions_name', ''))
-                        )
-                        lot.images.append(image)
-        
+            for img in data['confiscant_images_list']:
+                if isinstance(img, dict) and img.get('file_hash'):
+                    lot.images.append(LotImage(
+                        file_hash=img['file_hash'],
+                        file_name=img.get('description', img.get('image_positions_name', ''))
+                    ))
+
         return lot
+
+
+# ============================================================================
+# YANGI: Foydalanuvchi arizasi
+# ============================================================================
+
+@dataclass
+class UserApplication:
+    """
+    Foydalanuvchi yuborgan ariza.
+    storage ga saqlanadi → "Mening arizalarim" bo'limida ko'rinadi.
+    """
+    user_id: int
+    lot_id: int
+    lot_name: str
+    lot_price: float        # Ariza vaqtidagi narx
+    current_price: float    # Joriy narx (yangilanib turadi)
+    name: str
+    phone: str
+    applied_at: datetime
+    status: str = "pending"  # pending | contacted | done | cancelled
+
+    def price_changed(self) -> bool:
+        return abs(self.current_price - self.lot_price) > 0.01
+
+    def price_diff(self) -> float:
+        return self.current_price - self.lot_price
 
 
 @dataclass
 class UserBid:
-    """Foydalanuvchi taklifi"""
     user_id: int
     lot_id: int
     amount: float
     timestamp: datetime
-    position: int = 0  # Holatdagi o'rni (1, 2, 3...)
-    
-    def to_dict(self) -> dict:
-        return {
-            'user_id': self.user_id,
-            'lot_id': self.lot_id,
-            'amount': self.amount,
-            'timestamp': self.timestamp.isoformat(),
-            'position': self.position,
-        }
+    position: int = 0
 
 
 @dataclass
 class UserFavorite:
-    """Foydalanuvchi sevimlilari"""
     user_id: int
     lot_id: int
     added_at: datetime
     notify_enabled: bool = True
-    
-    def to_dict(self) -> dict:
-        return {
-            'user_id': self.user_id,
-            'lot_id': self.lot_id,
-            'added_at': self.added_at.isoformat(),
-            'notify_enabled': self.notify_enabled,
-        }
 
 
 @dataclass
 class UserNotification:
-    """Foydalanuvchi bildirish sozlamalari"""
     user_id: int
     lot_id: int
     notify_start: bool = True
     notify_end: bool = True
     notify_outbid: bool = True
     notify_winner: bool = True
-    
-    def to_dict(self) -> dict:
-        return {
-            'user_id': self.user_id,
-            'lot_id': self.lot_id,
-            'notify_start': self.notify_start,
-            'notify_end': self.notify_end,
-            'notify_outbid': self.notify_outbid,
-            'notify_winner': self.notify_winner,
-        }
 
 
-# In-memory storage (production uchun database kerak)
+# ============================================================================
+# STORAGE
+# ============================================================================
+
 class MemoryStorage:
-    """Xotira asosida saqlash (development uchun)"""
-    
+
     def __init__(self):
         self.lots: Dict[int, Lot] = {}
         self.user_bids: Dict[int, List[UserBid]] = {}
         self.user_favorites: Dict[int, List[UserFavorite]] = {}
         self.user_notifications: Dict[int, Dict[int, UserNotification]] = {}
+        self.user_applications: Dict[int, List[UserApplication]] = {}
         self.cache: Dict[str, Any] = {}
         self.cache_timestamps: Dict[str, datetime] = {}
-    
-    # Lot operatsiyalari
+
+    # Lot
     def save_lot(self, lot: Lot):
-        """Lotni saqlash"""
         self.lots[lot.id] = lot
-    
+
     def get_lot(self, lot_id: int) -> Optional[Lot]:
-        """Lotni olish"""
         return self.lots.get(lot_id)
-    
+
     def get_lots_by_status(self, status: str) -> List[Lot]:
-        """Status bo'yicha lotlar"""
-        return [lot for lot in self.lots.values() if lot.status == status]
-    
-    # Bid operatsiyalari
+        return [l for l in self.lots.values() if l.status == status]
+
+    # Bid
     def add_bid(self, bid: UserBid):
-        """Taklif qo'shish"""
-        if bid.user_id not in self.user_bids:
-            self.user_bids[bid.user_id] = []
-        self.user_bids[bid.user_id].append(bid)
-    
+        self.user_bids.setdefault(bid.user_id, []).append(bid)
+
     def get_user_bids(self, user_id: int) -> List[UserBid]:
-        """Foydalanuvchi takliflari"""
         return self.user_bids.get(user_id, [])
-    
-    def get_lot_bids(self, lot_id: int) -> List[UserBid]:
-        """Lot bo'yicha takliflar"""
-        all_bids = []
-        for bids in self.user_bids.values():
-            all_bids.extend([b for b in bids if b.lot_id == lot_id])
-        return sorted(all_bids, key=lambda x: x.amount, reverse=True)
-    
-    # Favorite operatsiyalari
+
+    # Favorite
     def add_favorite(self, favorite: UserFavorite):
-        """Sevimliga qo'shish"""
-        if favorite.user_id not in self.user_favorites:
-            self.user_favorites[favorite.user_id] = []
-        
-        # Dublikat tekshirish
-        existing = [f for f in self.user_favorites[favorite.user_id] if f.lot_id == favorite.lot_id]
-        if not existing:
-            self.user_favorites[favorite.user_id].append(favorite)
-    
+        favs = self.user_favorites.setdefault(favorite.user_id, [])
+        if not any(f.lot_id == favorite.lot_id for f in favs):
+            favs.append(favorite)
+
     def remove_favorite(self, user_id: int, lot_id: int):
-        """Sevimlilardan o'chirish"""
         if user_id in self.user_favorites:
-            self.user_favorites[user_id] = [
-                f for f in self.user_favorites[user_id] if f.lot_id != lot_id
-            ]
-    
+            self.user_favorites[user_id] = [f for f in self.user_favorites[user_id] if f.lot_id != lot_id]
+
     def get_user_favorites(self, user_id: int) -> List[UserFavorite]:
-        """Foydalanuvchi sevimlilari"""
         return self.user_favorites.get(user_id, [])
-    
+
     def is_favorite(self, user_id: int, lot_id: int) -> bool:
-        """Sevimli ekanligini tekshirish"""
-        favorites = self.get_user_favorites(user_id)
-        return any(f.lot_id == lot_id for f in favorites)
-    
-    # Notification operatsiyalari
+        return any(f.lot_id == lot_id for f in self.get_user_favorites(user_id))
+
+    # Application
+    def add_application(self, application: UserApplication):
+        apps = self.user_applications.setdefault(application.user_id, [])
+        for i, app in enumerate(apps):
+            if app.lot_id == application.lot_id:
+                apps[i] = application
+                return
+        apps.append(application)
+
+    def get_user_applications(self, user_id: int) -> List[UserApplication]:
+        apps = self.user_applications.get(user_id, [])
+        return sorted(apps, key=lambda a: a.applied_at, reverse=True)
+
+    def get_application(self, user_id: int, lot_id: int) -> Optional[UserApplication]:
+        for app in self.user_applications.get(user_id, []):
+            if app.lot_id == lot_id:
+                return app
+        return None
+
+    def update_application_price(self, lot_id: int, new_price: float):
+        for apps in self.user_applications.values():
+            for app in apps:
+                if app.lot_id == lot_id:
+                    app.current_price = new_price
+
+    def get_all_applications_for_lot(self, lot_id: int) -> List[UserApplication]:
+        result = []
+        for apps in self.user_applications.values():
+            result.extend(app for app in apps if app.lot_id == lot_id)
+        return result
+
+    # Notification
     def save_notification(self, notification: UserNotification):
-        """Bildirishnoma sozlamalarini saqlash"""
-        if notification.user_id not in self.user_notifications:
-            self.user_notifications[notification.user_id] = {}
-        self.user_notifications[notification.user_id][notification.lot_id] = notification
-    
+        self.user_notifications.setdefault(notification.user_id, {})[notification.lot_id] = notification
+
     def get_notification(self, user_id: int, lot_id: int) -> Optional[UserNotification]:
-        """Bildirishnoma sozlamalarini olish"""
         return self.user_notifications.get(user_id, {}).get(lot_id)
-    
-    # Cache operatsiyalari
+
+    # Cache
     def cache_set(self, key: str, value: Any, ttl: int = 300):
-        """Keshga saqlash"""
         self.cache[key] = value
         self.cache_timestamps[key] = datetime.now()
-    
+
     def cache_get(self, key: str, ttl: int = 300) -> Optional[Any]:
-        """Keshdan olish"""
         if key not in self.cache:
             return None
-        
-        timestamp = self.cache_timestamps.get(key)
-        if timestamp:
-            elapsed = (datetime.now() - timestamp).total_seconds()
-            if elapsed > ttl:
-                del self.cache[key]
-                del self.cache_timestamps[key]
-                return None
-        
-        return self.cache.get(key)
+        elapsed = (datetime.now() - self.cache_timestamps[key]).total_seconds()
+        if elapsed > ttl:
+            del self.cache[key]
+            del self.cache_timestamps[key]
+            return None
+        return self.cache[key]
 
 
-# Global storage instance
 storage = MemoryStorage()

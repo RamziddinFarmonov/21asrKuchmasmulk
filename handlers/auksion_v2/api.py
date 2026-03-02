@@ -56,7 +56,6 @@ class AuksionAPIV2:
             "sort_type": 1,
             "confiscant_groups_id": groups_id,
             "confiscant_categories_id": categories_id,
-            "regions_id": region_id,  # YANGI - viloyat filtri
             "areas_id": None,
             "auction_type": 0,
             "current_page": page,
@@ -77,6 +76,10 @@ class AuksionAPIV2:
             "address": "",
             "zz_md5": "d7431a0a032c91d10d97ceac59425f9d"
         }
+
+        # Only include region filter when provided (some API versions expect the key omitted)
+        if region_id is not None:
+            payload["regions_id"] = region_id
         
         logger.info(f"📤 API Request: groups_id={groups_id}, categories_id={categories_id}, region_id={region_id}")
         
@@ -89,21 +92,38 @@ class AuksionAPIV2:
                     return []
                 
                 data = await response.json()
-                rows = data.get("rows", [])
-                
+
+                # Try to extract rows from common response shapes
+                rows = data.get("rows") if isinstance(data, dict) else None
+                if not rows:
+                    for key in ("data", "result", "items", "rows", "lots"):
+                        candidate = data.get(key) if isinstance(data, dict) else None
+                        if isinstance(candidate, list):
+                            rows = candidate
+                            logger.debug(f"API fallback: used key '{key}' for rows extraction")
+                            break
+
+                if rows is None:
+                    # If no list found, ensure we have empty list and log response for debugging
+                    rows = []
+                    logger.debug(f"API returned non-list payload for lots: {str(data)[:1000]}")
+
                 logger.info(f"✅ API Success: {len(rows)} ta lot topildi")
-                
+
                 lots = []
                 for row in rows:
                     # Faqat aktiv lotlar
-                    status = row.get("status", "")
-                    if status == "finished" or status == "completed":
+                    status = row.get("status", "") if isinstance(row, dict) else ""
+                    if status in ("finished", "completed"):
                         continue
-                    
-                    lot = Lot.from_api_data(row)
-                    storage.save_lot(lot)
-                    lots.append(lot)
-                
+
+                    if isinstance(row, dict):
+                        lot = Lot.from_api_data(row)
+                        storage.save_lot(lot)
+                        lots.append(lot)
+                    else:
+                        logger.debug("Skipping non-dict row from API response")
+
                 logger.info(f"📦 Aktiv lotlar: {len(lots)} ta")
                 return lots
                 
