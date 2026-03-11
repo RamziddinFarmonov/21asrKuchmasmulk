@@ -80,7 +80,8 @@ def get_lot_detail_keyboard(
     lot: Lot,
     user_id: int,
     main_cat: str,
-    sub_cat: str
+    sub_cat: str,
+    page: int = 1
 ) -> InlineKeyboardMarkup:
     """
     Lot batafsil keyboard.
@@ -124,10 +125,10 @@ def get_lot_detail_keyboard(
         url=f"https://e-auksion.uz/lot/{lot.id}"
     )
 
-    # Orqaga
+    # Orqaga — lotlar ro'yxatiga qaytish (viloyat/tuman filtri saqlanadi)
     builder.button(
         text=f"{EMOJI_BACK} Orqaga",
-        callback_data=f"auk2:sub:{main_cat}:{sub_cat}"
+        callback_data=f"auk2:back_to_lots:{main_cat}:{sub_cat}:{page}"
     )
 
     builder.adjust(1)

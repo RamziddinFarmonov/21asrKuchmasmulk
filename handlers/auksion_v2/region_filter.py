@@ -263,6 +263,13 @@ async def _load_and_show_lots(callback: CallbackQuery, state: FSMContext, region
     main_cat = data.get("filter_main_cat", "kochmas_mulk")
     sub_cat  = data.get("filter_sub_cat", "kop_qavatli")
 
+    # Viloyat/tuman va joriy sahifani state ga saqlash
+    await state.update_data(
+        filter_region_id=region_id,
+        filter_area_id=area_id,
+        current_page=1
+    )
+
     await callback.message.edit_text("⏳ Lotlar yuklanmoqda...")
 
     filter_data = CATEGORY_FILTERS.get(sub_cat)

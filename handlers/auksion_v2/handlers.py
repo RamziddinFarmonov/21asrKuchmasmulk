@@ -108,26 +108,39 @@ async def callback_show_subcategory(callback: CallbackQuery):
 # ============================================================================
 
 @router.callback_query(F.data.startswith("auk2:page:"))
-async def callback_lots_page(callback: CallbackQuery):
+async def callback_lots_page(callback: CallbackQuery, state: FSMContext):
+    """Sahifalash — region_id va area_id state dan olinadi"""
     parts = callback.data.split(":")
     main_cat, sub_cat, page = parts[2], parts[3], int(parts[4])
     filter_data = CATEGORY_FILTERS.get(sub_cat)
     if not filter_data:
         await callback.answer("Xato", show_alert=True)
         return
+
+    # State dan viloyat/tuman filterini olish
+    data      = await state.get_data()
+    region_id = data.get("filter_region_id")   # None = barcha viloyatlar
+    area_id   = data.get("filter_area_id")      # None = barcha tumanlar
+
     await callback.message.edit_text("⏳ Yuklanmoqda...")
     lots = await api_client.get_lots_by_category(
         groups_id=filter_data["groups_id"],
         categories_id=filter_data["categories_id"],
+        region_id=region_id,
+        area_id=area_id,
         page=page
     )
     if not lots:
-        # Keyingi sahifa yo'q - foydalanuvchiga bildirish
         await callback.answer("⚠️ Bu sahifada lotlar yo'q. Oxirgi sahifadasiz.", show_alert=True)
         return
-    breadcrumb = get_breadcrumb(main_cat, sub_cat)
+
     from .config import ITEMS_PER_PAGE
-    has_next = len(lots) >= ITEMS_PER_PAGE
+    has_next   = len(lots) >= ITEMS_PER_PAGE
+    breadcrumb = get_breadcrumb(main_cat, sub_cat)
+
+    # Joriy sahifani state ga yangilash (lot ichidan orqaga qaytganda shu sahifaga)
+    await state.update_data(current_page=page)
+
     await callback.message.edit_text(
         f"📂 <b>{breadcrumb}</b>\n\n📄 {page}-sahifa | 📦 {len(lots)} ta lot\n\nLotni tanlang:",
         reply_markup=get_lots_list_keyboard(lots, main_cat, sub_cat, page, has_next),
@@ -136,12 +149,62 @@ async def callback_lots_page(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("auk2:back_to_lots:"))
+async def callback_back_to_lots(callback: CallbackQuery, state: FSMContext):
+    """Lot ichidan → lotlar ro'yxatiga qaytish (viloyat/tuman filtri saqlanadi)"""
+    parts    = callback.data.split(":")
+    main_cat = parts[2]
+    sub_cat  = parts[3]
+    page     = int(parts[4]) if len(parts) > 4 else 1
+
+    filter_data = CATEGORY_FILTERS.get(sub_cat)
+    if not filter_data:
+        await callback.answer("Xato", show_alert=True)
+        return
+
+    # State dan saqlangan viloyat/tuman filterini olish
+    data      = await state.get_data()
+    region_id = data.get("filter_region_id")
+    area_id   = data.get("filter_area_id")
+
+    await callback.message.edit_text("⏳ Yuklanmoqda...")
+    lots = await api_client.get_lots_by_category(
+        groups_id=filter_data["groups_id"],
+        categories_id=filter_data["categories_id"],
+        region_id=region_id,
+        area_id=area_id,
+        page=page
+    )
+
+    from .config import ITEMS_PER_PAGE
+    has_next   = len(lots) >= ITEMS_PER_PAGE
+    breadcrumb = get_breadcrumb(main_cat, sub_cat)
+
+    # Joylashuv nomini ko'rsatish
+    from .region_filter import _get_location_name
+    location_name = _get_location_name(region_id, area_id)
+
+    text = f"📂 <b>{breadcrumb}</b>\n\n"
+    if location_name and location_name != "Barcha viloyatlar":
+        text += f"📍 <b>{location_name}</b>\n"
+    text += f"📄 {page}-sahifa | 📦 {len(lots)} ta lot\n\nLotni tanlang:"
+
+    keyboard = get_lots_list_keyboard(lots, main_cat, sub_cat, page, has_next)
+
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    except Exception:
+        await callback.message.delete()
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
 # ============================================================================
 # LOT BATAFSIL — RASM + TO'LIQ MA'LUMOT
 # ============================================================================
 
 @router.callback_query(F.data.startswith("auk2:view:"))
-async def callback_view_lot(callback: CallbackQuery):
+async def callback_view_lot(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     lot_id = int(parts[2])
     main_cat = parts[3] if len(parts) > 3 else "kochmas_mulk"
@@ -165,7 +228,10 @@ async def callback_view_lot(callback: CallbackQuery):
 
         breadcrumb = get_breadcrumb(main_cat, sub_cat)
         full_text  = f"📂 <b>{breadcrumb}</b>\n\n" + _build_full_detail(lot)
-        keyboard   = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
+        # Joriy sahifani state dan olish (orqaga qaytganda shu sahifaga qaytish uchun)
+        _data      = await state.get_data()
+        cur_page   = _data.get("current_page", 1)
+        keyboard   = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat, cur_page)
 
         if lot.images:
             caption = _build_short_caption(lot, breadcrumb)
@@ -347,7 +413,7 @@ async def callback_add_favorite(callback: CallbackQuery):
         return
     storage.add_favorite(UserFavorite(user_id=callback.from_user.id, lot_id=lot_id, added_at=datetime.now()))
     await callback.answer("⭐ Sevimliga qo'shildi!", show_alert=True)
-    keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
+    keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat, 1)
     if callback.message.photo:
         await callback.message.edit_reply_markup(reply_markup=keyboard)
     else:
@@ -366,7 +432,7 @@ async def callback_remove_favorite(callback: CallbackQuery):
     await callback.answer("🗑 Sevimlilardan o'chirildi", show_alert=True)
     lot = storage.get_lot(lot_id)
     if lot:
-        keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat)
+        keyboard = get_lot_detail_keyboard(lot, callback.from_user.id, main_cat, sub_cat, 1)
         if callback.message.photo:
             await callback.message.edit_reply_markup(reply_markup=keyboard)
         else:
