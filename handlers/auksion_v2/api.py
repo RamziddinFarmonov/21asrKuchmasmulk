@@ -38,6 +38,7 @@ class AuksionAPIV2:
         page: int = 1,
         per_page: int = ITEMS_PER_PAGE,
         region_id: int = None,
+        area_id: int = None,
     ) -> List[Lot]:
         """
         Kategoriya bo'yicha lotlarni olish (E-auksion.uz format)
@@ -56,7 +57,7 @@ class AuksionAPIV2:
             "sort_type": 1,
             "confiscant_groups_id": groups_id,
             "confiscant_categories_id": categories_id,
-            "areas_id": None,
+            "areas_id": area_id,
             "auction_type": 0,
             "current_page": page,
             "per_page": per_page,
@@ -80,6 +81,8 @@ class AuksionAPIV2:
         # Only include region filter when provided (some API versions expect the key omitted)
         if region_id is not None:
             payload["regions_id"] = region_id
+        if area_id is not None:
+            payload["areas_id"] = area_id
         
         logger.info(f"📤 API Request: groups_id={groups_id}, categories_id={categories_id}, region_id={region_id}")
         
@@ -136,13 +139,15 @@ class AuksionAPIV2:
         groups_id: str,
         categories_id: int,
         region_id: int = None,
+        area_id: int = None,
         page: int = 1
     ) -> List[Lot]:
-        """Viloyat bilan filter - sodda wrapper"""
+        """Viloyat + tuman filtri bilan - sodda wrapper"""
         return await self.get_lots_by_category(
             groups_id=groups_id,
             categories_id=categories_id,
             region_id=region_id,
+            area_id=area_id,
             page=page
         )
     

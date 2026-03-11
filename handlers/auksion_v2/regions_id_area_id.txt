@@ -1,0 +1,308 @@
+Andijon viloyati: regions_id=7
+
+- Oltinko'l: areas_id=104
+- andijon tumani = areas_id : 93
+- baliqchi tumani = 95
+- bo'ston tumani = 96
+- buloqboshi tumani = 97
+- julaquduq tumani = 98
+- izbosgan tumani =  99
+- ulug'nor tumani = 106
+- qo'rg'ontepa = 100
+- asaka tumani = 94
+- marhamat tumani = 103
+- shaxrixon - 108
+- paxtaobod - 105
+- xo'jabod tuman - 107
+- andijon shahri - 92
+xonobod shahri - 216
+
+
+
+Buxoro viloyati, region_id = 11
+
+- olot tumani = 160
+- Buxoro tuman = 154
+- vobkent tumani = 156
+- g'ijduvon tumani = 153
+- kogon tumani - 152
+- qorako'l tumani - 159
+- qorovulbozor tumani - 161 
+- peshko' tumani = 157
+- romitan tumani - 151
+- jondor tumani - 155
+- shofirkon tumani - 158
+- buxoro shahri - 150
+- kogon shahri - 210
+
+
+
+
+Jizzaxt viloyati : regions_id = 4
+
+- arnasoy tumani = 54
+- baxmal tumani = 50
+- g'allaorol tumani = 49
+- sharof rashidov tumani = 48
+- do'stlik tumani = 53
+- zomin tumani = 57
+- zarbdor tumani = 56
+- mirzacho'l tumani = 55
+- zafarobot tumani = 52
+- paxtakor tumani = 51
+- forish tumani = 59
+- yangiobod tumani = 60
+- jizzax shahri = 47
+
+
+
+
+qashqadaryo viloyati : regions_id : 9
+
+- g'uzor tumani : 127
+- dehqonobot tumani : 134
+- qamashi tumani : 126
+- qarshi tumani : 128
+- koson tumani : 130
+- kitob tumani : 123
+- mirishkor tumani : 132
+- muborak tumani : 133
+- nishon tumani : 129
+- kasbi tumani : 131
+- ko'kdala tumani : 235
+- chiroqchi tumani : 125
+- shahrizabr tumani : 122
+- yakkabog' tumani : 124
+- qarshi shahri : 121
+- shahrizabz shahri : 222
+
+
+
+
+
+navoiy viloyati : regions_id : 12
+
+konimex tumani : 165
+qiziltepa tumani : 164
+navbahor tumani : 167
+karmana tumani : 163
+nurota tumani : 168
+tomdi tumani : 211
+uchquduq tumani : 212
+xatirchi tumani : 169
+navoiy shahri : 166
+zarafshon shahri : 162
+go'zg'on shahri : 224
+
+
+
+
+namangan viloyati : regions_id : 8
+
+mingbuloq tumani : 117
+kosonsoy tumani : 110
+namangan tumani : 118
+norin tumani : 111
+pop tumani : 116
+to'raqo'rg'on tumani : 115
+uychi tumani : 119
+uchqo'rg'on tumani : 112
+chartoq tumani : 113
+chust tumani : 114
+yangiqo'rg'on tumani : 120
+namangan shahri : 109
+davlatobod tumani : 232
+yangi Namangan tumani : 234
+
+
+
+
+
+samarqand viloyati : regions_id : 3
+
+oqdaryo tumani : 38
+bulung'ur tumani : 32
+jomboy tumani : 33
+ishtixon tumani : 35
+kattaqo'rg'on tumani : 41
+qo'shrabot tumani : 45
+narpay tumani : 39
+payariq tumani : 40
+pastdarg'om tumani : 34
+paxtachi tumani : 42
+samarqand tumani : 31
+nurobod tumani : 37
+urgut tumani : 44
+tayloq tumani : 43
+samarqand shahri : 30
+kattaqo'rg'on shahri : 36
+
+
+
+
+
+
+surxandaryo viloyati : regions_id : 10 
+
+oltinsoy tumani : 143
+angor tumani : 135
+bandixon tumani : 228
+boysun tumani : 136
+muzrabot tumani : 142
+denov tumani : 138
+jarqo'rg'on tumani : 139
+qumqo'rg'on tumani : 141
+qiziriq tumani : 140
+sariosiyo tumani : 144
+termiz tumani : 146
+uzun tumani : 149
+sherobod tumani : 147
+sho'rchi tumani : 148
+termiz shahri : 145
+
+
+
+
+
+
+sirdaryo viloyati : regions_id : 5
+
+oqoltin tumani : 64
+boyovut tumani : 65
+sayxunobod tumani : 69
+guliston tumani : 66
+sardoba tumani : 72
+mirzaobod tumani : 71
+sirdaryo tumani : 67
+xovos tumani : 70
+guliston shahri : 61
+shirin shahri : 63
+yangiyer shahri : 62
+
+
+
+
+
+
+toshkent shahri : regions_id :   1
+
+uchtepa tumani : 7
+bektimir tumani : 11
+yunusobod tumani : 5
+mirzo ulug'bek tumani : 2
+mirobod tumani : 1
+shayxontohur tumani : 10
+olmazor tumani : 4
+sirg'ali tumani : 8
+yakkasaroy tumani : 3
+yashnobod tumani : 9
+yangihayot tumani : 230
+chilonzor tumani : 6
+yangi toshkent shahri : 236
+
+
+
+
+
+
+
+toshkent viloyati : regions id : 2
+
+
+oqqo'rg'on tumani : 15
+ohangaron tumani : 14
+bekobod tumani : 19
+bo'sonliq tumani : 18
+bo'ka tumani : 17
+quyichirchiq tumani : 24
+zangiota tumani : 20
+yuqorichirchiq tumani : 28
+qibray tumani : 21
+parkent tumani : 22
+piskent tumani : 23
+o'rtachiqchiq tumani : 25
+chinoz tumani : 27
+yangiyo'l tumani : 29
+toshkent tumani : 218
+nurafshon shahri : 219
+olmaliq shahri : 12
+angren shahri : 13
+bekobod shahri : 16
+ohangaron shahri : 221
+chirchiq shahri : 26
+yangiyo'l shahri : 220
+
+
+
+
+
+
+farg'ona viloyati : regions_id : 6
+
+oltiariq tumani : 82
+qo'shtepa tumani : 83
+bag'dod tumani : 77
+buvayda tumani : 214
+beshariq tumani : 78
+quva tumani : 91
+uchko'prik tumani : 87
+rishton tumani : 84
+so'x tumani : 85
+toshloq tumani : 86
+o'zbekiston tumani : 90
+farg'ona tumani : 88
+dang'ara tumani : 80
+furqat tumani : 89
+yozyovon tumani : 81
+farg'ona shahri : 74
+qo'qon shahri : 76
+quvasoy shahri : 75
+marg'ilon shahri : 73
+
+
+
+
+
+
+xorazm viloyati : regions_id : 14
+
+bog'dot tumani : 191
+gurlan tumani : 194
+qo'shko'prik tumani : 195
+urganch tumani : 187
+xazorasp tumani : 196
+tuproqqal'a tumani : 226
+xonqa tumani : 189
+xiva tumani : 188
+shovot tumani : 190
+yangiariq tumani : 192
+yangibozor tumani : 193
+urganch shahri : 186
+xiva shahri : 223
+
+
+
+
+
+
+
+
+qoraqalpog'iston respublikasi : regions_id : 13
+
+amudayro tumani : 182
+beruniy tumani : 185
+bo'zatov tumani : 198
+qorao'zak tumani : 174
+kegeyli tumani : 172
+qo'ng'irot tumani : 180
+qonliko'l tumani : 178
+mo'ynoq tumani : 181
+nukus tumani : 171
+taxiatosh tumani : 179
+taxtako'pir tumani : 175
+to'rtko'l tumani : 183
+xo'jayli tumani : 176
+chimboy tumani : 173
+shumanay tumani : 177
+ellikqal'a tumani : 184
+nukus shahri : 170
