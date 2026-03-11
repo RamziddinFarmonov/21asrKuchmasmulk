@@ -37,7 +37,7 @@ DISTRICTS = {
         "Olmaliq shahri", "Angren shahri", "Ohangaron", "Oqqo'rg'on", "Bekobod",
         "Bo'ka", "Bo'stonliq", "Zangiota", "Qibray", "Parkent", "Piskent",
         "Quyichirchiq", "O'rtachirchiq", "Chirchiq shahri", "Chinoz",
-        "Yuqorichirchiq", "Yangiyo'l", "Toshkent tumani", "Nurafshon shahri",
+        "Yuqorichirchiq", "Yangiyo'l", "Toshkent tumani", "Nurafshon shahri", "chinoz", 
     ],
     "samarkand": [
         "Samarqand shahri", "Samarqand tumani", "Bulung'ur", "Jomboy", "Pastdarg'om",
