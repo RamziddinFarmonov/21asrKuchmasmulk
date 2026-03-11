@@ -1,347 +1,166 @@
 """
 handlers/auksion_v2/region_filter.py
-Viloyat + Tuman filtri
-
-YANGILANGAN:
-  - Viloyat tanlanganida → tuman tanlash ekrani chiqadi
-  - Tuman tanlanganidan keyin → lotlar ko'rsatiladi
-  - "Barcha tumanlar" tugmasi ham mavjud
-  - API ga areas_id uzatiladi
+TUZATILDI: BUTTON_DATA_INVALID
+  - Tuman callback_data 64 baytdan oshib ketardi
+  - Yangi format: auk2:dst:{area_id}:{region_id}  (faqat raqamlar, max ~20 bayt)
+  - main_cat va sub_cat → FSMContext state da saqlanadi
 """
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
 
 from .api import api_client
-from .models import storage
 from .keyboards import get_lots_list_keyboard, get_back_to_main_keyboard
-from .utils import format_price
 from .categories import get_breadcrumb, CATEGORY_FILTERS
+from .config import ITEMS_PER_PAGE
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = Router()
 
-# ============================================================================
-# VILOYATLAR
-# ============================================================================
-
 REGIONS = {
-    "all":          "🌍 Barcha viloyatlar",
-    "toshkent_sh":  "🏛 Toshkent shahri",
-    "toshkent":     "🏙 Toshkent viloyati",
-    "samarqand":    "🕌 Samarqand",
-    "buxoro":       "🕌 Buxoro",
-    "andijon":      "🏔 Andijon",
-    "fargona":      "🌄 Farg'ona",
-    "namangan":     "🏔 Namangan",
-    "qashqadaryo":  "🏜 Qashqadaryo",
-    "surxondaryo":  "🌞 Surxondaryo",
-    "jizzax":       "🏞 Jizzax",
-    "sirdaryo":     "🌊 Sirdaryo",
-    "navoiy":       "⛰ Navoiy",
-    "xorazm":       "🏜 Xorazm",
-    "qoraqalpog":   "🐪 Qoraqalpog'iston",
+    "all":         "🌍 Barcha viloyatlar",
+    "toshkent_sh": "🏛 Toshkent shahri",
+    "toshkent":    "🏙 Toshkent viloyati",
+    "samarqand":   "🕌 Samarqand",
+    "buxoro":      "🕌 Buxoro",
+    "andijon":     "🏔 Andijon",
+    "fargona":     "🌄 Farg'ona",
+    "namangan":    "🏔 Namangan",
+    "qashqadaryo": "🏜 Qashqadaryo",
+    "surxondaryo": "🌞 Surxondaryo",
+    "jizzax":      "🏞 Jizzax",
+    "sirdaryo":    "🌊 Sirdaryo",
+    "navoiy":      "⛰ Navoiy",
+    "xorazm":      "🏜 Xorazm",
+    "qoraqalpog":  "🐪 Qoraqalpog'iston",
 }
 
 REGION_IDS = {
-    "all":         None,
-    "toshkent_sh": 1,
-    "toshkent":    2,
-    "samarqand":   3,
-    "buxoro":      11,
-    "andijon":     7,
-    "fargona":     6,
-    "namangan":    8,
-    "qashqadaryo": 9,
-    "surxondaryo": 10,
-    "jizzax":      4,
-    "sirdaryo":    5,
-    "navoiy":      12,
-    "xorazm":      14,
-    "qoraqalpog":  13,
+    "all": None, "toshkent_sh": 1, "toshkent": 2, "samarqand": 3,
+    "buxoro": 11, "andijon": 7, "fargona": 6, "namangan": 8,
+    "qashqadaryo": 9, "surxondaryo": 10, "jizzax": 4, "sirdaryo": 5,
+    "navoiy": 12, "xorazm": 14, "qoraqalpog": 13,
 }
 
-# ============================================================================
-# TUMANLAR (areas_id)
-# ============================================================================
+REGION_CODE_BY_ID = {v: k for k, v in REGION_IDS.items() if v is not None}
 
+# Tumanlar: list of (nomi, areas_id)
 DISTRICTS = {
-    # ── Toshkent shahri (regions_id=1) ──────────────────────────────────────
-    "toshkent_sh": {
-        "mirobod":        ("Mirobod tumani",          1),
-        "mirzo_ulugbek":  ("Mirzo Ulug'bek tumani",   2),
-        "yakkasaroy":     ("Yakkasaroy tumani",        3),
-        "olmazor":        ("Olmazor tumani",           4),
-        "yunusobod":      ("Yunusobod tumani",         5),
-        "chilonzor":      ("Chilonzor tumani",         6),
-        "uchtepa":        ("Uchtepa tumani",           7),
-        "sirg_ali":       ("Sirg'ali tumani",          8),
-        "yashnobod":      ("Yashnobod tumani",         9),
-        "shayxontohur":   ("Shayxontohur tumani",      10),
-        "bektimir":       ("Bektimir tumani",          11),
-        "yangihayot":     ("Yangihayot tumani",        230),
-        "yangi_toshkent": ("Yangi Toshkent shahri",    236),
-    },
-
-    # ── Toshkent viloyati (regions_id=2) ────────────────────────────────────
-    "toshkent": {
-        "olmaliq_sh":      ("Olmaliq shahri",          12),
-        "angren_sh":       ("Angren shahri",           13),
-        "ohangaron_t":     ("Ohangaron tumani",        14),
-        "oqqo_rgon":       ("Oqqo'rg'on tumani",       15),
-        "bekobod_sh":      ("Bekobod shahri",          16),
-        "bo_ka":           ("Bo'ka tumani",            17),
-        "bo_stonliq":      ("Bo'stonliq tumani",       18),
-        "bekobod_t":       ("Bekobod tumani",          19),
-        "zangiota":        ("Zangiota tumani",         20),
-        "qibray":          ("Qibray tumani",           21),
-        "parkent":         ("Parkent tumani",          22),
-        "piskent":         ("Piskent tumani",          23),
-        "quyichirchiq":    ("Quyichirchiq tumani",     24),
-        "o_rtachirchiq":   ("O'rtachirchiq tumani",    25),
-        "chirchiq_sh":     ("Chirchiq shahri",         26),
-        "chinoz":          ("Chinoz tumani",           27),
-        "yuqorichirchiq":  ("Yuqorichirchiq tumani",   28),
-        "yangiyo_l_t":     ("Yangiyo'l tumani",        29),
-        "toshkent_t":      ("Toshkent tumani",         218),
-        "nurafshon_sh":    ("Nurafshon shahri",        219),
-        "yangiyo_l_sh":    ("Yangiyo'l shahri",        220),
-        "ohangaron_sh":    ("Ohangaron shahri",        221),
-    },
-
-    # ── Samarqand viloyati (regions_id=3) ───────────────────────────────────
-    "samarqand": {
-        "samarqand_sh":    ("Samarqand shahri",        30),
-        "samarqand_t":     ("Samarqand tumani",        31),
-        "bulung_ur":       ("Bulung'ur tumani",        32),
-        "jomboy":          ("Jomboy tumani",           33),
-        "pastdarg_om":     ("Pastdarg'om tumani",      34),
-        "ishtixon":        ("Ishtixon tumani",         35),
-        "kattaqo_sh":      ("Kattaqo'rg'on shahri",    36),
-        "nurobod":         ("Nurobod tumani",          37),
-        "oqdaryo":         ("Oqdaryo tumani",          38),
-        "narpay":          ("Narpay tumani",           39),
-        "payariq":         ("Payariq tumani",          40),
-        "kattaqo_t":       ("Kattaqo'rg'on tumani",    41),
-        "paxtachi":        ("Paxtachi tumani",         42),
-        "tayloq":          ("Tayloq tumani",           43),
-        "urgut":           ("Urgut tumani",            44),
-        "qo_shrabot":      ("Qo'shrabot tumani",       45),
-    },
-
-    # ── Jizzax viloyati (regions_id=4) ──────────────────────────────────────
-    "jizzax": {
-        "jizzax_sh":       ("Jizzax shahri",           47),
-        "sharof_rashidov": ("Sharof Rashidov tumani",  48),
-        "g_allaorol":      ("G'allaorol tumani",       49),
-        "baxmal":          ("Baxmal tumani",           50),
-        "paxtakor":        ("Paxtakor tumani",         51),
-        "zafarobot":       ("Zafarobot tumani",        52),
-        "do_stlik":        ("Do'stlik tumani",         53),
-        "arnasoy":         ("Arnasoy tumani",          54),
-        "mirzacho_l":      ("Mirzacho'l tumani",       55),
-        "zarbdor":         ("Zarbdor tumani",          56),
-        "zomin":           ("Zomin tumani",            57),
-        "forish":          ("Forish tumani",           59),
-        "yangiobod":       ("Yangiobod tumani",        60),
-    },
-
-    # ── Sirdaryo viloyati (regions_id=5) ────────────────────────────────────
-    "sirdaryo": {
-        "guliston_sh":     ("Guliston shahri",         61),
-        "yangiyer_sh":     ("Yangiyer shahri",         62),
-        "shirin_sh":       ("Shirin shahri",           63),
-        "oqoltin":         ("Oqoltin tumani",          64),
-        "boyovut":         ("Boyovut tumani",          65),
-        "guliston_t":      ("Guliston tumani",         66),
-        "sirdaryo_t":      ("Sirdaryo tumani",         67),
-        "sayxunobod":      ("Sayxunobod tumani",       69),
-        "xovos":           ("Xovos tumani",            70),
-        "mirzaobod":       ("Mirzaobod tumani",        71),
-        "sardoba":         ("Sardoba tumani",          72),
-    },
-
-    # ── Farg'ona viloyati (regions_id=6) ────────────────────────────────────
-    "fargona": {
-        "marg_ilon_sh":    ("Marg'ilon shahri",        73),
-        "fargona_sh":      ("Farg'ona shahri",         74),
-        "quvasoy_sh":      ("Quvasoy shahri",          75),
-        "qo_qon_sh":       ("Qo'qon shahri",           76),
-        "bag_dod":         ("Bag'dod tumani",          77),
-        "beshariq":        ("Beshariq tumani",         78),
-        "dang_ara":        ("Dang'ara tumani",         80),
-        "yozyovon":        ("Yozyovon tumani",         81),
-        "oltiariq":        ("Oltiariq tumani",         82),
-        "qo_shtepa":       ("Qo'shtepa tumani",        83),
-        "rishton":         ("Rishton tumani",          84),
-        "so_x":            ("So'x tumani",             85),
-        "toshloq":         ("Toshloq tumani",          86),
-        "uchko_prik":      ("Uchko'prik tumani",       87),
-        "fargona_t":       ("Farg'ona tumani",         88),
-        "furqat":          ("Furqat tumani",           89),
-        "o_zbekiston":     ("O'zbekiston tumani",      90),
-        "quva":            ("Quva tumani",             91),
-        "buvayda":         ("Buvayda tumani",          214),
-    },
-
-    # ── Andijon viloyati (regions_id=7) ─────────────────────────────────────
-    "andijon": {
-        "andijon_sh":      ("Andijon shahri",          92),
-        "andijon_t":       ("Andijon tumani",          93),
-        "asaka":           ("Asaka tumani",            94),
-        "baliqchi":        ("Baliqchi tumani",         95),
-        "bo_ston":         ("Bo'ston tumani",          96),
-        "buloqboshi":      ("Buloqboshi tumani",       97),
-        "julaquduq":       ("Jalaquduq tumani",        98),
-        "izboskan":        ("Izboskan tumani",         99),
-        "qo_rg_ontepa":    ("Qo'rg'ontepa tumani",    100),
-        "marhamat":        ("Marhamat tumani",         103),
-        "oltinko_l":       ("Oltinko'l tumani",        104),
-        "paxtaobod":       ("Paxtaobod tumani",        105),
-        "ulug_nor":        ("Ulug'nor tumani",         106),
-        "xo_jabod":        ("Xo'jabod tumani",         107),
-        "shahrixon":       ("Shahrixon tumani",        108),
-        "xonobod_sh":      ("Xonobod shahri",          216),
-    },
-
-    # ── Namangan viloyati (regions_id=8) ────────────────────────────────────
-    "namangan": {
-        "namangan_sh":     ("Namangan shahri",         109),
-        "kosonsoy":        ("Kosonsoy tumani",         110),
-        "norin":           ("Norin tumani",            111),
-        "uchqo_rg_on":     ("Uchqo'rg'on tumani",     112),
-        "chartoq":         ("Chartoq tumani",          113),
-        "chust":           ("Chust tumani",            114),
-        "to_raqo_rg_on":   ("To'raqo'rg'on tumani",   115),
-        "pop":             ("Pop tumani",              116),
-        "mingbuloq":       ("Mingbuloq tumani",        117),
-        "namangan_t":      ("Namangan tumani",         118),
-        "uychi":           ("Uychi tumani",            119),
-        "yangiqo_rg_on":   ("Yangiqo'rg'on tumani",   120),
-        "davlatobod":      ("Davlatobod tumani",       232),
-        "yangi_namangan":  ("Yangi Namangan tumani",   234),
-    },
-
-    # ── Qashqadaryo viloyati (regions_id=9) ─────────────────────────────────
-    "qashqadaryo": {
-        "qarshi_sh":       ("Qarshi shahri",           121),
-        "shahrizabz_t":    ("Shahrizabz tumani",       122),
-        "kitob":           ("Kitob tumani",            123),
-        "yakkabog_":       ("Yakkabog' tumani",        124),
-        "chiroqchi":       ("Chiroqchi tumani",        125),
-        "qamashi":         ("Qamashi tumani",          126),
-        "g_uzor":          ("G'uzor tumani",           127),
-        "qarshi_t":        ("Qarshi tumani",           128),
-        "nishon":          ("Nishon tumani",           129),
-        "koson":           ("Koson tumani",            130),
-        "kasbi":           ("Kasbi tumani",            131),
-        "mirishkor":       ("Mirishkor tumani",        132),
-        "muborak":         ("Muborak tumani",          133),
-        "dehqonobod":      ("Dehqonobod tumani",       134),
-        "ko_kdala":        ("Ko'kdala tumani",         235),
-        "shahrizabz_sh":   ("Shahrizabz shahri",       222),
-    },
-
-    # ── Surxondaryo viloyati (regions_id=10) ────────────────────────────────
-    "surxondaryo": {
-        "oltinsoy":        ("Oltinsoy tumani",         143),
-        "angor":           ("Angor tumani",            135),
-        "bandixon":        ("Bandixon tumani",         228),
-        "boysun":          ("Boysun tumani",           136),
-        "muzrabot":        ("Muzrabot tumani",         142),
-        "denov":           ("Denov tumani",            138),
-        "jarqo_rg_on":     ("Jarqo'rg'on tumani",     139),
-        "qumqo_rg_on":     ("Qumqo'rg'on tumani",     141),
-        "qiziriq":         ("Qiziriq tumani",          140),
-        "sariosiyo":       ("Sariosiyo tumani",        144),
-        "termiz_t":        ("Termiz tumani",           146),
-        "uzun":            ("Uzun tumani",             149),
-        "sherobod":        ("Sherobod tumani",         147),
-        "sho_rchi":        ("Sho'rchi tumani",         148),
-        "termiz_sh":       ("Termiz shahri",           145),
-    },
-
-    # ── Buxoro viloyati (regions_id=11) ─────────────────────────────────────
-    "buxoro": {
-        "buxoro_sh":       ("Buxoro shahri",           150),
-        "romitan":         ("Romitan tumani",          151),
-        "kogon_t":         ("Kogon tumani",            152),
-        "g_ijduvon":       ("G'ijduvon tumani",        153),
-        "buxoro_t":        ("Buxoro tumani",           154),
-        "jondor":          ("Jondor tumani",           155),
-        "vobkent":         ("Vobkent tumani",          156),
-        "peshko_":         ("Peshko' tumani",          157),
-        "shofirkon":       ("Shofirkon tumani",        158),
-        "qorako_l":        ("Qorako'l tumani",         159),
-        "olot":            ("Olot tumani",             160),
-        "qorovulbozor":    ("Qorovulbozor tumani",     161),
-        "kogon_sh":        ("Kogon shahri",            210),
-    },
-
-    # ── Navoiy viloyati (regions_id=12) ─────────────────────────────────────
-    "navoiy": {
-        "zarafshon_sh":    ("Zarafshon shahri",        162),
-        "karmana":         ("Karmana tumani",          163),
-        "qiziltepa":       ("Qiziltepa tumani",        164),
-        "konimex":         ("Konimex tumani",          165),
-        "navoiy_sh":       ("Navoiy shahri",           166),
-        "navbahor":        ("Navbahor tumani",         167),
-        "nurota":          ("Nurota tumani",           168),
-        "xatirchi":        ("Xatirchi tumani",         169),
-        "tomdi":           ("Tomdi tumani",            211),
-        "uchquduq":        ("Uchquduq tumani",         212),
-        "go_zg_on_sh":     ("Go'zg'on shahri",         224),
-    },
-
-    # ── Qoraqalpog'iston (regions_id=13) ────────────────────────────────────
-    "qoraqalpog": {
-        "nukus_sh":        ("Nukus shahri",            170),
-        "nukus_t":         ("Nukus tumani",            171),
-        "kegeyli":         ("Kegeyli tumani",          172),
-        "chimboy":         ("Chimboy tumani",          173),
-        "qorao_zak":       ("Qorao'zak tumani",        174),
-        "taxtako_pir":     ("Taxtako'pir tumani",      175),
-        "xo_jayli":        ("Xo'jayli tumani",         176),
-        "shumanay":        ("Shumanay tumani",         177),
-        "qonliko_l":       ("Qonliko'l tumani",        178),
-        "taxiatosh":       ("Taxiatosh tumani",        179),
-        "qo_ng_irot":      ("Qo'ng'irot tumani",       180),
-        "mo_ynoq":         ("Mo'ynoq tumani",          181),
-        "amudaryo":        ("Amudaryo tumani",         182),
-        "to_rtko_l":       ("To'rtko'l tumani",        183),
-        "ellikqal_a":      ("Ellikqal'a tumani",       184),
-        "beruniy":         ("Beruniy tumani",          185),
-        "bo_zatov":        ("Bo'zatov tumani",         198),
-    },
-
-    # ── Xorazm viloyati (regions_id=14) ─────────────────────────────────────
-    "xorazm": {
-        "urganch_sh":      ("Urganch shahri",          186),
-        "urganch_t":       ("Urganch tumani",          187),
-        "xiva_t":          ("Xiva tumani",             188),
-        "xonqa":           ("Xonqa tumani",            189),
-        "shovot":          ("Shovot tumani",           190),
-        "bog_dot":         ("Bog'dot tumani",          191),
-        "yangiariq":       ("Yangiariq tumani",        192),
-        "yangibozor":      ("Yangibozor tumani",       193),
-        "gurlan":          ("Gurlan tumani",           194),
-        "qo_shko_prik":    ("Qo'shko'prik tumani",     195),
-        "xazorasp":        ("Xazorasp tumani",         196),
-        "tuproqqal_a":     ("Tuproqqal'a tumani",      226),
-        "xiva_sh":         ("Xiva shahri",             223),
-    },
+    "toshkent_sh": [
+        ("Mirobod", 1), ("Mirzo Ulug'bek", 2), ("Yakkasaroy", 3),
+        ("Olmazor", 4), ("Yunusobod", 5), ("Chilonzor", 6),
+        ("Uchtepa", 7), ("Sirg'ali", 8), ("Yashnobod", 9),
+        ("Shayxontohur", 10), ("Bektimir", 11),
+        ("Yangihayot", 230), ("Yangi Toshkent", 236),
+    ],
+    "toshkent": [
+        ("Olmaliq sh", 12), ("Angren sh", 13), ("Ohangaron t", 14),
+        ("Oqqo'rg'on", 15), ("Bekobod sh", 16), ("Bo'ka", 17),
+        ("Bo'stonliq", 18), ("Bekobod t", 19), ("Zangiota", 20),
+        ("Qibray", 21), ("Parkent", 22), ("Piskent", 23),
+        ("Quyichirchiq", 24), ("O'rtachirchiq", 25), ("Chirchiq sh", 26),
+        ("Chinoz", 27), ("Yuqorichirchiq", 28), ("Yangiyo'l t", 29),
+        ("Toshkent t", 218), ("Nurafshon sh", 219),
+        ("Yangiyo'l sh", 220), ("Ohangaron sh", 221),
+    ],
+    "samarqand": [
+        ("Samarqand sh", 30), ("Samarqand t", 31), ("Bulung'ur", 32),
+        ("Jomboy", 33), ("Pastdarg'om", 34), ("Ishtixon", 35),
+        ("Kattaqo'rg'on sh", 36), ("Nurobod", 37), ("Oqdaryo", 38),
+        ("Narpay", 39), ("Payariq", 40), ("Kattaqo'rg'on t", 41),
+        ("Paxtachi", 42), ("Tayloq", 43), ("Urgut", 44), ("Qo'shrabot", 45),
+    ],
+    "jizzax": [
+        ("Jizzax sh", 47), ("Sharof Rashidov", 48), ("G'allaorol", 49),
+        ("Baxmal", 50), ("Paxtakor", 51), ("Zafarobot", 52),
+        ("Do'stlik", 53), ("Arnasoy", 54), ("Mirzacho'l", 55),
+        ("Zarbdor", 56), ("Zomin", 57), ("Forish", 59), ("Yangiobod", 60),
+    ],
+    "sirdaryo": [
+        ("Guliston sh", 61), ("Yangiyer sh", 62), ("Shirin sh", 63),
+        ("Oqoltin", 64), ("Boyovut", 65), ("Guliston t", 66),
+        ("Sirdaryo t", 67), ("Sayxunobod", 69), ("Xovos", 70),
+        ("Mirzaobod", 71), ("Sardoba", 72),
+    ],
+    "fargona": [
+        ("Marg'ilon sh", 73), ("Farg'ona sh", 74), ("Quvasoy sh", 75),
+        ("Qo'qon sh", 76), ("Bag'dod", 77), ("Beshariq", 78),
+        ("Dang'ara", 80), ("Yozyovon", 81), ("Oltiariq", 82),
+        ("Qo'shtepa", 83), ("Rishton", 84), ("So'x", 85),
+        ("Toshloq", 86), ("Uchko'prik", 87), ("Farg'ona t", 88),
+        ("Furqat", 89), ("O'zbekiston t", 90), ("Quva", 91), ("Buvayda", 214),
+    ],
+    "andijon": [
+        ("Andijon sh", 92), ("Andijon t", 93), ("Asaka", 94),
+        ("Baliqchi", 95), ("Bo'ston", 96), ("Buloqboshi", 97),
+        ("Jalaquduq", 98), ("Izboskan", 99), ("Qo'rg'ontepa", 100),
+        ("Marhamat", 103), ("Oltinko'l", 104), ("Paxtaobod", 105),
+        ("Ulug'nor", 106), ("Xo'jabod", 107), ("Shahrixon", 108),
+        ("Xonobod sh", 216),
+    ],
+    "namangan": [
+        ("Namangan sh", 109), ("Kosonsoy", 110), ("Norin", 111),
+        ("Uchqo'rg'on", 112), ("Chartoq", 113), ("Chust", 114),
+        ("To'raqo'rg'on", 115), ("Pop", 116), ("Mingbuloq", 117),
+        ("Namangan t", 118), ("Uychi", 119), ("Yangiqo'rg'on", 120),
+        ("Davlatobod", 232), ("Yangi Namangan", 234),
+    ],
+    "qashqadaryo": [
+        ("Qarshi sh", 121), ("Shahrizabz t", 122), ("Kitob", 123),
+        ("Yakkabog'", 124), ("Chiroqchi", 125), ("Qamashi", 126),
+        ("G'uzor", 127), ("Qarshi t", 128), ("Nishon", 129),
+        ("Koson", 130), ("Kasbi", 131), ("Mirishkor", 132),
+        ("Muborak", 133), ("Dehqonobod", 134),
+        ("Ko'kdala", 235), ("Shahrizabz sh", 222),
+    ],
+    "surxondaryo": [
+        ("Oltinsoy", 143), ("Angor", 135), ("Bandixon", 228),
+        ("Boysun", 136), ("Muzrabot", 142), ("Denov", 138),
+        ("Jarqo'rg'on", 139), ("Qumqo'rg'on", 141), ("Qiziriq", 140),
+        ("Sariosiyo", 144), ("Termiz t", 146), ("Uzun", 149),
+        ("Sherobod", 147), ("Sho'rchi", 148), ("Termiz sh", 145),
+    ],
+    "buxoro": [
+        ("Buxoro sh", 150), ("Romitan", 151), ("Kogon t", 152),
+        ("G'ijduvon", 153), ("Buxoro t", 154), ("Jondor", 155),
+        ("Vobkent", 156), ("Peshko'", 157), ("Shofirkon", 158),
+        ("Qorako'l", 159), ("Olot", 160), ("Qorovulbozor", 161),
+        ("Kogon sh", 210),
+    ],
+    "navoiy": [
+        ("Zarafshon sh", 162), ("Karmana", 163), ("Qiziltepa", 164),
+        ("Konimex", 165), ("Navoiy sh", 166), ("Navbahor", 167),
+        ("Nurota", 168), ("Xatirchi", 169),
+        ("Tomdi", 211), ("Uchquduq", 212), ("Go'zg'on sh", 224),
+    ],
+    "qoraqalpog": [
+        ("Nukus sh", 170), ("Nukus t", 171), ("Kegeyli", 172),
+        ("Chimboy", 173), ("Qorao'zak", 174), ("Taxtako'pir", 175),
+        ("Xo'jayli", 176), ("Shumanay", 177), ("Qonliko'l", 178),
+        ("Taxiatosh", 179), ("Qo'ng'irot", 180), ("Mo'ynoq", 181),
+        ("Amudaryo", 182), ("To'rtko'l", 183), ("Ellikqal'a", 184),
+        ("Beruniy", 185), ("Bo'zatov", 198),
+    ],
+    "xorazm": [
+        ("Urganch sh", 186), ("Urganch t", 187), ("Xiva t", 188),
+        ("Xonqa", 189), ("Shovot", 190), ("Bog'dot", 191),
+        ("Yangiariq", 192), ("Yangibozor", 193), ("Gurlan", 194),
+        ("Qo'shko'prik", 195), ("Xazorasp", 196),
+        ("Tuproqqal'a", 226), ("Xiva sh", 223),
+    ],
 }
 
 
-# ============================================================================
-# KLAVIATURALAR
-# ============================================================================
+# ── Klaviaturalar ─────────────────────────────────────────────────────────────
 
 def get_region_filter_keyboard(main_cat: str, sub_cat: str) -> InlineKeyboardMarkup:
-    """Viloyat tanlash klaviaturasi"""
     buttons = [[InlineKeyboardButton(
         text=REGIONS["all"],
         callback_data=f"auk2:region:all:{main_cat}:{sub_cat}"
     )]]
-    region_list = list(REGIONS.items())[1:]
+    region_list = [(k, v) for k, v in REGIONS.items() if k != "all"]
     for i in range(0, len(region_list), 2):
         row = []
         for j in range(2):
@@ -352,104 +171,83 @@ def get_region_filter_keyboard(main_cat: str, sub_cat: str) -> InlineKeyboardMar
                     callback_data=f"auk2:region:{code}:{main_cat}:{sub_cat}"
                 ))
         buttons.append(row)
-    buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"auk2:cat:{main_cat}")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_district_filter_keyboard(region_code: str, main_cat: str, sub_cat: str) -> InlineKeyboardMarkup:
-    """Tuman tanlash klaviaturasi"""
-    districts = DISTRICTS.get(region_code, {})
-    buttons = []
-
-    # "Barcha tumanlar" — birinchi
     buttons.append([InlineKeyboardButton(
-        text="🌍 Barcha tumanlar",
-        callback_data=f"auk2:district:all:{region_code}:{main_cat}:{sub_cat}"
-    )])
-
-    # Tumanlar — 2 tadan
-    items = [(k, v) for k, v in districts.items() if k != "all"]
-    for i in range(0, len(items), 2):
-        row = []
-        for j in range(2):
-            if i + j < len(items):
-                d_code, (d_name, _) = items[i + j]
-                row.append(InlineKeyboardButton(
-                    text=d_name,
-                    callback_data=f"auk2:district:{d_code}:{region_code}:{main_cat}:{sub_cat}"
-                ))
-        buttons.append(row)
-
-    buttons.append([InlineKeyboardButton(
-        text="🔙 Viloyatlar",
+        text="🔙 Orqaga",
         callback_data=f"auk2:sub:{main_cat}:{sub_cat}"
     )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-# ============================================================================
-# HANDLERLAR
-# ============================================================================
+def get_district_filter_keyboard(region_code: str, region_id: int) -> InlineKeyboardMarkup:
+    """
+    Tuman klaviaturasi.
+    callback_data: auk2:dst:{area_id}:{region_id}  ← faqat raqamlar, max ~20 bayt
+    area_id=0 → barcha tumanlar
+    """
+    districts = DISTRICTS.get(region_code, [])
+    buttons = [[InlineKeyboardButton(
+        text="🌍 Barcha tumanlar",
+        callback_data=f"auk2:dst:0:{region_id}"
+    )]]
+    for i in range(0, len(districts), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(districts):
+                d_name, a_id = districts[i + j]
+                row.append(InlineKeyboardButton(
+                    text=d_name,
+                    callback_data=f"auk2:dst:{a_id}:{region_id}"
+                ))
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton(text="🔙 Viloyatlar", callback_data="auk2:chrgn")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# auk2:sub: handler handlers.py da mavjud
 
+# ── Handlerlar ────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("auk2:region:"))
-async def callback_region_selected(callback: CallbackQuery):
-    """Viloyat tanlandi → Tuman tanlash ekrani"""
+async def callback_region_selected(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     region_code = parts[2]
     main_cat    = parts[3]
     sub_cat     = parts[4]
 
-    # "Barcha viloyatlar" — tuman ekranisiz to'g'ridan API
+    # main_cat + sub_cat ni state ga saqlash (tuman handlerida kerak)
+    await state.update_data(filter_main_cat=main_cat, filter_sub_cat=sub_cat)
+
     if region_code == "all":
-        await _load_and_show_lots(callback, None, None, main_cat, sub_cat)
+        await _load_and_show_lots(callback, state, None, None)
         return
 
-    # Tuman ro'yxati bormi?
-    if region_code in DISTRICTS and len(DISTRICTS[region_code]) > 1:
-        region_name = REGIONS.get(region_code, "")
-        breadcrumb  = get_breadcrumb(main_cat, sub_cat)
+    region_id = REGION_IDS.get(region_code)
+    districts  = DISTRICTS.get(region_code, [])
+
+    if districts:
         await callback.message.edit_text(
-            f"📂 <b>{breadcrumb}</b>\n\n"
-            f"🗺️ <b>{region_name}</b>\n\n"
+            f"📂 <b>{get_breadcrumb(main_cat, sub_cat)}</b>\n\n"
+            f"🗺️ <b>{REGIONS.get(region_code, '')}</b>\n\n"
             "📍 <b>Tumanni tanlang:</b>",
-            reply_markup=get_district_filter_keyboard(region_code, main_cat, sub_cat),
+            reply_markup=get_district_filter_keyboard(region_code, region_id),
             parse_mode="HTML"
         )
         await callback.answer()
     else:
-        # Tuman yo'q → to'g'ridan viloyat bo'yicha
-        region_id = REGION_IDS.get(region_code)
-        await _load_and_show_lots(callback, region_id, None, main_cat, sub_cat)
+        await _load_and_show_lots(callback, state, region_id, None)
 
 
-@router.callback_query(F.data.startswith("auk2:district:"))
-async def callback_district_selected(callback: CallbackQuery):
-    """Tuman tanlandi → Lotlar yuklash"""
-    parts       = callback.data.split(":")
-    dist_code   = parts[2]
-    region_code = parts[3]
-    main_cat    = parts[4]
-    sub_cat     = parts[5]
-
-    region_id = REGION_IDS.get(region_code)
-
-    if dist_code == "all":
-        area_id = None
-    else:
-        district_data = DISTRICTS.get(region_code, {}).get(dist_code)
-        area_id = district_data[1] if district_data else None
-
-    await _load_and_show_lots(callback, region_id, area_id, main_cat, sub_cat)
+@router.callback_query(F.data.startswith("auk2:dst:"))
+async def callback_district_selected(callback: CallbackQuery, state: FSMContext):
+    parts     = callback.data.split(":")
+    area_id   = int(parts[2])   # 0 = barcha
+    region_id = int(parts[3])
+    await _load_and_show_lots(callback, state, region_id, None if area_id == 0 else area_id)
 
 
-@router.callback_query(F.data.startswith("auk2:change_region:"))
-async def callback_change_region(callback: CallbackQuery):
-    """Viloyatni o'zgartirish"""
-    parts = callback.data.split(":")
-    main_cat, sub_cat = parts[2], parts[3]
+@router.callback_query(F.data == "auk2:chrgn")
+async def callback_change_region(callback: CallbackQuery, state: FSMContext):
+    data     = await state.get_data()
+    main_cat = data.get("filter_main_cat", "kochmas_mulk")
+    sub_cat  = data.get("filter_sub_cat", "kop_qavatli")
     await callback.message.edit_text(
         f"📂 <b>{get_breadcrumb(main_cat, sub_cat)}</b>\n\n📍 <b>Viloyatni tanlang:</b>",
         reply_markup=get_region_filter_keyboard(main_cat, sub_cat),
@@ -458,19 +256,18 @@ async def callback_change_region(callback: CallbackQuery):
     await callback.answer()
 
 
-# ============================================================================
-# LOTLARNI YUKLASH VA KO'RSATISH
-# ============================================================================
+# ── Lotlarni yuklash ──────────────────────────────────────────────────────────
 
-async def _load_and_show_lots(
-    callback, region_id, area_id, main_cat: str, sub_cat: str
-):
-    """API dan lotlar olib ko'rsatish (viloyat + tuman filtri bilan)"""
+async def _load_and_show_lots(callback: CallbackQuery, state: FSMContext, region_id, area_id):
+    data     = await state.get_data()
+    main_cat = data.get("filter_main_cat", "kochmas_mulk")
+    sub_cat  = data.get("filter_sub_cat", "kop_qavatli")
+
     await callback.message.edit_text("⏳ Lotlar yuklanmoqda...")
 
     filter_data = CATEGORY_FILTERS.get(sub_cat)
     if not filter_data:
-        await callback.answer("❌ Xato", show_alert=True)
+        await callback.answer("❌ Kategoriya topilmadi", show_alert=True)
         return
 
     try:
@@ -482,50 +279,43 @@ async def _load_and_show_lots(
             page=1
         )
 
-        breadcrumb   = get_breadcrumb(main_cat, sub_cat)
-        region_name  = _get_location_name(region_id, area_id)
+        breadcrumb    = get_breadcrumb(main_cat, sub_cat)
+        location_name = _get_location_name(region_id, area_id)
 
         if not lots:
-            buttons = [
-                [InlineKeyboardButton(text="🌍 Boshqa viloyat", callback_data=f"auk2:sub:{main_cat}:{sub_cat}")],
-                [InlineKeyboardButton(text="🏠 Bosh menyu",     callback_data="auk2:menu")],
-            ]
             await callback.message.edit_text(
                 f"📂 <b>{breadcrumb}</b>\n\n"
-                f"📍 <b>{region_name}</b>\n\n"
+                f"📍 <b>{location_name}</b>\n\n"
                 "❌ <b>Bu hududda lotlar topilmadi</b>\n\n"
-                "• Boshqa viloyat/tumanni tanlang\n"
-                "• Yoki keyinroq urinib ko'ring",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                "Boshqa viloyat yoki tumanni tanlang.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="🌍 Boshqa viloyat", callback_data="auk2:chrgn")
+                ]]),
                 parse_mode="HTML"
             )
             await callback.answer("Bu hududda lotlar yo'q", show_alert=True)
             return
 
-        # API total_pages bermaydi: agar ITEMS_PER_PAGE ta lot kelsa, keyingi sahifa bo'lishi mumkin
-        from .config import ITEMS_PER_PAGE
         has_next = len(lots) >= ITEMS_PER_PAGE
-        keyboard = get_lots_list_keyboard(lots, main_cat, sub_cat, 1, has_next)
+        keyboard  = get_lots_list_keyboard(lots, main_cat, sub_cat, 1, has_next)
         keyboard.inline_keyboard.insert(0, [
             InlineKeyboardButton(
-                text=f"📍 {region_name}  |  🔄 O'zgartirish",
-                callback_data=f"auk2:change_region:{main_cat}:{sub_cat}"
+                text=f"📍 {location_name}  |  🔄 O'zgartirish",
+                callback_data="auk2:chrgn"
             )
         ])
 
         await callback.message.edit_text(
             f"📂 <b>{breadcrumb}</b>\n\n"
-            f"📍 <b>{region_name}</b>\n"
-            f"📦 Topildi: <b>{len(lots)}</b> ta lot\n\n"
-            "Lotni tanlang 👇",
+            f"📍 <b>{location_name}</b>\n"
+            f"📦 Topildi: <b>{len(lots)}</b> ta lot\n\nLotni tanlang 👇",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
         await callback.answer()
 
     except Exception as e:
-        import logging
-        logging.error(f"District filter error: {e}")
+        logger.error(f"Filter error: {e}", exc_info=True)
         await callback.message.edit_text(
             "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
             reply_markup=get_back_to_main_keyboard()
@@ -534,19 +324,13 @@ async def _load_and_show_lots(
 
 
 def _get_location_name(region_id, area_id) -> str:
-    """Ko'rsatiladigan joy nomi"""
     if region_id is None:
         return "Barcha viloyatlar"
-
-    # Viloyat nomini topish
-    region_name = ""
-    for code, rid in REGION_IDS.items():
-        if rid == region_id:
-            region_name = REGIONS.get(code, "")
-            # Agar tuman ham bo'lsa
-            if area_id is not None and code in DISTRICTS:
-                for d_code, (d_name, a_id) in DISTRICTS[code].items():
-                    if a_id == area_id:
-                        return f"{region_name} → {d_name}"
-            break
-    return region_name or "Noma'lum hudud"
+    region_code = REGION_CODE_BY_ID.get(region_id, "")
+    region_name = REGIONS.get(region_code, "")
+    if area_id is None:
+        return region_name
+    for d_name, a_id in DISTRICTS.get(region_code, []):
+        if a_id == area_id:
+            return f"{region_name} → {d_name}"
+    return region_name
