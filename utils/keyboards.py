@@ -269,7 +269,6 @@ def get_districts_keyboard(region_code: str):
 
     districts = DISTRICTS.get(region_code, [])
     buttons = [[KeyboardButton(text=d)] for d in districts]
-    buttons.append([KeyboardButton(text="⏭ O'tkazib yuborish")])
     buttons.append([KeyboardButton(text="🔙 Orqaga")])
 
     return ReplyKeyboardMarkup(
