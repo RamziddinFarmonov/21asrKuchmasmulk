@@ -48,8 +48,13 @@ def get_lots_list_keyboard(
     main_cat: str,
     sub_cat: str,
     page: int = 1,
-    total_pages: int = 1
+    has_next: bool = False
 ) -> InlineKeyboardMarkup:
+    """
+    Lotlar ro'yxati keyboard.
+    has_next=True bo'lsa "Keyingi" tugmasi chiqadi.
+    API total_pages ni bermaydi, shuning uchun faqat joriy sahifa ko'rsatiladi.
+    """
     builder = InlineKeyboardBuilder()
 
     for lot in lots:
@@ -59,9 +64,9 @@ def get_lots_list_keyboard(
     nav = []
     if page > 1:
         nav.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"auk2:page:{main_cat}:{sub_cat}:{page-1}"))
-    if total_pages > 1:
-        nav.append(InlineKeyboardButton(text=f"🔄 {page}/{total_pages}", callback_data="noop"))
-    if page < total_pages:
+    # Joriy sahifa raqami (total_pages yo'q, shuning uchun faqat raqam)
+    nav.append(InlineKeyboardButton(text=f"📄 {page}-sahifa", callback_data="noop"))
+    if has_next:
         nav.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"auk2:page:{main_cat}:{sub_cat}:{page+1}"))
     if nav:
         builder.row(*nav)
@@ -162,6 +167,10 @@ def get_favorites_keyboard(
     page: int = 1,
     total_pages: int = 1
 ) -> InlineKeyboardMarkup:
+    """
+    Sevimlilar keyboard.
+    total_pages ma'lum (sevimlilari soni aniq), shuning uchun to'g'ri ko'rsatiladi.
+    """
     builder = InlineKeyboardBuilder()
     for lot in lots:
         lot_name = lot.name[:35] + "..." if len(lot.name) > 35 else lot.name
@@ -171,7 +180,7 @@ def get_favorites_keyboard(
     if page > 1:
         nav.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"auk2:fav_page:{page-1}"))
     if total_pages > 1:
-        nav.append(InlineKeyboardButton(text=f"🔄 {page}/{total_pages}", callback_data="noop"))
+        nav.append(InlineKeyboardButton(text=f"📄 {page}/{total_pages}", callback_data="noop"))
     if page < total_pages:
         nav.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"auk2:fav_page:{page+1}"))
     if nav:

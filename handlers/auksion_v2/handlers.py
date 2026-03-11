@@ -122,12 +122,15 @@ async def callback_lots_page(callback: CallbackQuery):
         page=page
     )
     if not lots:
-        await callback.answer("Bu sahifada lotlar yo'q", show_alert=True)
+        # Keyingi sahifa yo'q - foydalanuvchiga bildirish
+        await callback.answer("⚠️ Bu sahifada lotlar yo'q. Oxirgi sahifadasiz.", show_alert=True)
         return
     breadcrumb = get_breadcrumb(main_cat, sub_cat)
+    from .config import ITEMS_PER_PAGE
+    has_next = len(lots) >= ITEMS_PER_PAGE
     await callback.message.edit_text(
-        f"📂 <b>{breadcrumb}</b>\n\n📄 Sahifa: {page} | 📦 {len(lots)} ta lot\n\nLotni tanlang:",
-        reply_markup=get_lots_list_keyboard(lots, main_cat, sub_cat, page, 999),
+        f"📂 <b>{breadcrumb}</b>\n\n📄 {page}-sahifa | 📦 {len(lots)} ta lot\n\nLotni tanlang:",
+        reply_markup=get_lots_list_keyboard(lots, main_cat, sub_cat, page, has_next),
         parse_mode="HTML"
     )
     await callback.answer()

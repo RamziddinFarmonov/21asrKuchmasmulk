@@ -382,7 +382,7 @@ def get_district_filter_keyboard(region_code: str, main_cat: str, sub_cat: str) 
 
     buttons.append([InlineKeyboardButton(
         text="🔙 Viloyatlar",
-        callback_data=f"auk2:subcat:{main_cat}:{sub_cat}"
+        callback_data=f"auk2:sub:{main_cat}:{sub_cat}"
     )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -391,18 +391,7 @@ def get_district_filter_keyboard(region_code: str, main_cat: str, sub_cat: str) 
 # HANDLERLAR
 # ============================================================================
 
-@router.callback_query(F.data.startswith("auk2:subcat:"))
-async def callback_show_region_selection(callback: CallbackQuery):
-    """Sub-kategoriya → Viloyat tanlash"""
-    parts = callback.data.split(":")
-    main_cat, sub_cat = parts[2], parts[3]
-    breadcrumb = get_breadcrumb(main_cat, sub_cat)
-    await callback.message.edit_text(
-        f"📂 <b>{breadcrumb}</b>\n\n📍 <b>Viloyatni tanlang:</b>",
-        reply_markup=get_region_filter_keyboard(main_cat, sub_cat),
-        parse_mode="HTML"
-    )
-    await callback.answer()
+# auk2:sub: handler handlers.py da mavjud
 
 
 @router.callback_query(F.data.startswith("auk2:region:"))
@@ -498,7 +487,7 @@ async def _load_and_show_lots(
 
         if not lots:
             buttons = [
-                [InlineKeyboardButton(text="🌍 Boshqa viloyat", callback_data=f"auk2:subcat:{main_cat}:{sub_cat}")],
+                [InlineKeyboardButton(text="🌍 Boshqa viloyat", callback_data=f"auk2:sub:{main_cat}:{sub_cat}")],
                 [InlineKeyboardButton(text="🏠 Bosh menyu",     callback_data="auk2:menu")],
             ]
             await callback.message.edit_text(
@@ -513,7 +502,10 @@ async def _load_and_show_lots(
             await callback.answer("Bu hududda lotlar yo'q", show_alert=True)
             return
 
-        keyboard = get_lots_list_keyboard(lots, main_cat, sub_cat, 1, 999)
+        # API total_pages bermaydi: agar ITEMS_PER_PAGE ta lot kelsa, keyingi sahifa bo'lishi mumkin
+        from .config import ITEMS_PER_PAGE
+        has_next = len(lots) >= ITEMS_PER_PAGE
+        keyboard = get_lots_list_keyboard(lots, main_cat, sub_cat, 1, has_next)
         keyboard.inline_keyboard.insert(0, [
             InlineKeyboardButton(
                 text=f"📍 {region_name}  |  🔄 O'zgartirish",
