@@ -254,3 +254,26 @@ def get_my_objects_keyboard(has_objects: bool = True) -> InlineKeyboardMarkup:
         ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
+
+
+# ============================================================================
+# USHBU KODNI utils/keyboards.py GA QO'SHING (mavjud kod o'chirilmaydi)
+# ============================================================================
+# Import: from utils.constants import DISTRICTS
+# (agar mavjud importlarga DISTRICTS ni qo'shing)
+
+def get_districts_keyboard(region_code: str):
+    """Tanlangan viloyat tumanlarini ko'rsatuvchi klaviatura"""
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    from utils.constants import DISTRICTS
+
+    districts = DISTRICTS.get(region_code, [])
+    buttons = [[KeyboardButton(text=d)] for d in districts]
+    buttons.append([KeyboardButton(text="⏭ O'tkazib yuborish")])
+    buttons.append([KeyboardButton(text="🔙 Orqaga")])
+
+    return ReplyKeyboardMarkup(
+        keyboard=buttons,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )

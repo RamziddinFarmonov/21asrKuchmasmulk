@@ -92,6 +92,7 @@ async def view_kochmas_my_detail(callback: CallbackQuery):
         f"🆔 E'lon #{obj['id']}\n"
         f"📅 {obj.get('created_at', '')}\n\n"
         f"🗺️ <b>Viloyat:</b> {get_region_name_by_code(obj.get('region', ''))}\n"
+        f"🏘️ <b>Tuman:</b> {obj.get('district') or '—'}\n"
         f"📐 <b>Maydon:</b> {format_area(obj.get('area', 0))}\n"
     )
     if obj.get('rooms'):

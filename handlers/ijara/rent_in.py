@@ -15,11 +15,11 @@ from aiogram.fsm.context import FSMContext
 
 from utils.states import IjaraRentInStates
 from utils.keyboards import (
-    get_regions_keyboard, get_rental_types_keyboard,
+    get_regions_keyboard, get_districts_keyboard, get_rental_types_keyboard,
     get_ijara_menu
 )
 from utils.constants import (
-    REGIONS, RENTAL_TYPES,
+    REGIONS, DISTRICTS, RENTAL_TYPES,
     format_price, format_area,
     get_region_name_by_code, get_property_type_name_by_code
 )
@@ -50,7 +50,36 @@ async def process_region(message: Message, state: FSMContext):
     if message.text not in REGIONS:
         await message.answer("❌ Tugmalardan tanlang!", reply_markup=get_regions_keyboard())
         return
-    await state.update_data(region=REGIONS[message.text], region_name=message.text)
+    region_code = REGIONS[message.text]
+    await state.update_data(region=region_code, region_name=message.text)
+    await state.set_state(IjaraRentInStates.choosing_district)
+    await message.answer(
+        "🏘️ <b>Qaysi tumandan qidiryapsiz?</b>\n\nTumanni tanlang yoki o'tkazib yuboring:",
+        reply_markup=get_districts_keyboard(region_code), parse_mode="HTML"
+    )
+
+
+@router.message(IjaraRentInStates.choosing_district)
+async def process_district_rent_in(message: Message, state: FSMContext):
+    if message.text == "🔙 Orqaga":
+        await state.set_state(IjaraRentInStates.choosing_region)
+        await message.answer("Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+        return
+    data = await state.get_data()
+    region_code = data.get('region', '')
+    districts = DISTRICTS.get(region_code, [])
+
+    if message.text == "⏭ O'tkazib yuborish":
+        await state.update_data(district=None, district_name=None)
+    elif message.text in districts:
+        await state.update_data(district=message.text, district_name=message.text)
+    else:
+        await message.answer(
+            "❌ Iltimos, tugmalardan birini tanlang!",
+            reply_markup=get_districts_keyboard(region_code)
+        )
+        return
+
     await state.set_state(IjaraRentInStates.choosing_property_type)
     await message.answer(
         "🏠 <b>Ijara turi:</b>",
@@ -61,8 +90,12 @@ async def process_region(message: Message, state: FSMContext):
 @router.message(IjaraRentInStates.choosing_property_type)
 async def process_property_type(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
-        await state.set_state(IjaraRentInStates.choosing_region)
-        await message.answer("Viloyat:", reply_markup=get_regions_keyboard())
+        data = await state.get_data()
+        await state.set_state(IjaraRentInStates.choosing_district)
+        await message.answer(
+            "🏘️ Tumanni tanlang:",
+            reply_markup=get_districts_keyboard(data.get('region', ''))
+        )
         return
     if message.text not in RENTAL_TYPES:
         await message.answer("❌ Tugmalardan tanlang!", reply_markup=get_rental_types_keyboard())
@@ -76,6 +109,7 @@ async def process_property_type(message: Message, state: FSMContext):
 
     objects = db.get_ijara_list(
         region=data['region'],
+        district=data.get('district'),
         property_type=data['property_type'],
         action_type='rent_out'
     )
@@ -104,7 +138,9 @@ async def process_property_type(message: Message, state: FSMContext):
     keyboard.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="ijara_back")])
 
     await message.answer(
-        f"📋 <b>{data['region_name']} — {data['property_type_name']}</b>\n\n"
+        f"📋 <b>{data['region_name']}"
+        + (f" | {data['district_name']}" if data.get('district_name') else "")
+        + f" — {data['property_type_name']}</b>\n\n"
         f"Topildi: <b>{len(objects)}</b> ta e'lon\n\n"
         "Batafsil ko'rish uchun tanlang:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
@@ -131,6 +167,7 @@ async def callback_view_ijara(callback: CallbackQuery):
 
     text  = f"📋 <b>{get_property_type_name_by_code(obj.get('property_type', ''))}</b>\n\n"
     text += f"🗺️ <b>Viloyat:</b> {get_region_name_by_code(obj.get('region', ''))}\n"
+    text += f"🏘️ <b>Tuman:</b> {obj.get('district') or '—'}\n"
     text += f"📐 <b>Maydon:</b> {format_area(obj.get('area', 0))}\n"
     if obj.get('rooms'):
         text += f"🚪 <b>Xonalar:</b> {obj['rooms']} ta\n"

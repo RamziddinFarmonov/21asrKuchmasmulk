@@ -36,6 +36,7 @@ class DatabaseManager:
                     full_name TEXT NOT NULL,
                     phone TEXT NOT NULL,
                     region TEXT NOT NULL,
+                    district TEXT,
                     property_type TEXT NOT NULL,
                     action_type TEXT NOT NULL,
                     area REAL,
@@ -61,6 +62,7 @@ class DatabaseManager:
                     full_name TEXT NOT NULL,
                     phone TEXT NOT NULL,
                     region TEXT NOT NULL,
+                    district TEXT,
                     property_type TEXT NOT NULL,
                     action_type TEXT NOT NULL,
                     area REAL,
@@ -90,6 +92,18 @@ class DatabaseManager:
                 )
             """)
             
+            # Migration: mavjud jadvallarga district ustuni qo'shish (agar yo'q bo'lsa)
+            try:
+                cursor.execute("ALTER TABLE kochmas_mulk ADD COLUMN district TEXT")
+                logger.info("✅ Migration: kochmas_mulk.district ustuni qo'shildi")
+            except Exception:
+                pass  # Ustun allaqachon mavjud
+            try:
+                cursor.execute("ALTER TABLE ijara ADD COLUMN district TEXT")
+                logger.info("✅ Migration: ijara.district ustuni qo'shildi")
+            except Exception:
+                pass  # Ustun allaqachon mavjud
+
             conn.commit()
             logger.info("✅ Database initialized successfully")
     
@@ -103,16 +117,17 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO kochmas_mulk (
-                    user_id, username, full_name, phone, region, property_type,
+                    user_id, username, full_name, phone, region, district, property_type,
                     action_type, area, rooms, floor, total_floors, price,
                     description, photo_id, video_id, address
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data['user_id'],
                 data.get('username'),
                 data['full_name'],
                 data['phone'],
                 data['region'],
+                data.get('district'),
                 data['property_type'],
                 data['action_type'],
                 data.get('area'),
@@ -131,6 +146,7 @@ class DatabaseManager:
     def get_kochmas_mulk_list(
         self,
         region: Optional[str] = None,
+        district: Optional[str] = None,
         property_type: Optional[str] = None,
         action_type: Optional[str] = None,
         limit: int = 10,
@@ -147,7 +163,11 @@ class DatabaseManager:
             if region:
                 query += " AND region = ?"
                 params.append(region)
-            
+
+            if district:
+                query += " AND district = ?"
+                params.append(district)
+
             if property_type:
                 query += " AND property_type = ?"
                 params.append(property_type)
@@ -194,16 +214,17 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO ijara (
-                    user_id, username, full_name, phone, region, property_type,
+                    user_id, username, full_name, phone, region, district, property_type,
                     action_type, area, rooms, floor, total_floors, monthly_price,
                     min_rental_period, description, photo_id, video_id, address
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data['user_id'],
                 data.get('username'),
                 data['full_name'],
                 data['phone'],
                 data['region'],
+                data.get('district'),
                 data['property_type'],
                 data['action_type'],
                 data.get('area'),
@@ -223,6 +244,7 @@ class DatabaseManager:
     def get_ijara_list(
         self,
         region: Optional[str] = None,
+        district: Optional[str] = None,
         property_type: Optional[str] = None,
         action_type: Optional[str] = None,
         limit: int = 10,
@@ -239,7 +261,11 @@ class DatabaseManager:
             if region:
                 query += " AND region = ?"
                 params.append(region)
-            
+
+            if district:
+                query += " AND district = ?"
+                params.append(district)
+
             if property_type:
                 query += " AND property_type = ?"
                 params.append(property_type)

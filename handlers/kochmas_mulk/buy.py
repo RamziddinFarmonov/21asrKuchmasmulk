@@ -17,12 +17,12 @@ from aiogram.fsm.context import FSMContext
 
 from utils.states import KochmasMulkBuyStates, ApplicationStates
 from utils.keyboards import (
-    get_regions_keyboard, get_property_types_keyboard,
+    get_regions_keyboard, get_districts_keyboard, get_property_types_keyboard,
     get_kochmas_mulk_menu, get_ijara_menu,
     get_cancel_button, get_skip_and_cancel
 )
 from utils.constants import (
-    REGIONS, PROPERTY_TYPES,
+    REGIONS, DISTRICTS, PROPERTY_TYPES,
     format_price, format_area,
     get_region_name_by_code, get_property_type_name_by_code,
     validate_phone, format_phone
@@ -59,20 +59,52 @@ async def process_region_buy(message: Message, state: FSMContext):
     if message.text not in REGIONS:
         await message.answer("❌ Tugmalardan tanlang!", reply_markup=get_regions_keyboard())
         return
-    await state.update_data(region=REGIONS[message.text], region_name=message.text)
+    region_code = REGIONS[message.text]
+    await state.update_data(region=region_code, region_name=message.text)
+    await state.set_state(KochmasMulkBuyStates.choosing_district)
+    await message.answer(
+        "🏘️ <b>Qaysi tumandan qidiryapsiz?</b>\n\nTumanni tanlang yoki o'tkazib yuboring:",
+        reply_markup=get_districts_keyboard(region_code), parse_mode="HTML"
+    )
+
+
+@router.message(KochmasMulkBuyStates.choosing_district)
+async def process_district_buy(message: Message, state: FSMContext):
+    if message.text == "🔙 Orqaga":
+        await state.set_state(KochmasMulkBuyStates.choosing_region)
+        await message.answer("Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+        return
+    data = await state.get_data()
+    region_code = data.get('region', '')
+    districts = DISTRICTS.get(region_code, [])
+
+    if message.text == "⏭ O'tkazib yuborish":
+        await state.update_data(district=None, district_name=None)
+    elif message.text in districts:
+        await state.update_data(district=message.text, district_name=message.text)
+    else:
+        await message.answer(
+            "❌ Iltimos, tugmalardan birini tanlang!",
+            reply_markup=get_districts_keyboard(region_code)
+        )
+        return
+
     await state.set_state(KochmasMulkBuyStates.choosing_property_type)
     await message.answer(
         "🏠 <b>Qanday mulk qidiryapsiz?</b>",
-        reply_markup=get_property_types_keyboard(),
-        parse_mode="HTML"
+        reply_markup=get_property_types_keyboard(), parse_mode="HTML"
     )
 
 
 @router.message(KochmasMulkBuyStates.choosing_property_type)
 async def process_property_type_buy(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
-        await state.set_state(KochmasMulkBuyStates.choosing_region)
-        await message.answer("Viloyat:", reply_markup=get_regions_keyboard())
+        data = await state.get_data()
+        await state.set_state(KochmasMulkBuyStates.choosing_district)
+        await message.answer(
+            "🏘️ Tumanni tanlang:",
+            reply_markup=get_districts_keyboard(data.get('region', ''))
+        )
         return
     if message.text not in PROPERTY_TYPES:
         await message.answer("❌ Tugmalardan tanlang!", reply_markup=get_property_types_keyboard())
@@ -86,6 +118,7 @@ async def process_property_type_buy(message: Message, state: FSMContext):
 
     objects = db.get_kochmas_mulk_list(
         region=data['region'],
+        district=data.get('district'),
         property_type=data['property_type'],
         action_type='sell',
         limit=50
@@ -143,6 +176,7 @@ async def callback_view_object(callback: CallbackQuery):
 
     text = f"🏠 <b>{get_property_type_name_by_code(obj.get('property_type', ''))}</b>\n\n"
     text += f"🗺️ <b>Viloyat:</b> {get_region_name_by_code(obj.get('region', ''))}\n"
+    text += f"🏘️ <b>Tuman:</b> {obj.get('district') or '—'}\n"
     text += f"📐 <b>Maydon:</b> {format_area(obj.get('area', 0))}\n"
     if obj.get('rooms'):
         text += f"🚪 <b>Xonalar:</b> {obj['rooms']} ta\n"

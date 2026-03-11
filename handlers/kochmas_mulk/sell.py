@@ -15,12 +15,12 @@ from aiogram.fsm.context import FSMContext
 
 from utils.states import KochmasMulkSellStates
 from utils.keyboards import (
-    get_regions_keyboard, get_property_types_keyboard,
+    get_regions_keyboard, get_districts_keyboard, get_property_types_keyboard,
     get_cancel_button, get_skip_and_cancel,
     get_confirmation_keyboard, get_kochmas_mulk_menu
 )
 from utils.constants import (
-    REGIONS, PROPERTY_TYPES,
+    REGIONS, DISTRICTS, PROPERTY_TYPES,
     format_price, format_area, format_phone, validate_phone
 )
 from database.db_manager import db
@@ -50,7 +50,41 @@ async def process_region(message: Message, state: FSMContext):
     if message.text not in REGIONS:
         await message.answer("❌ Iltimos, tugmalardan birini tanlang!", reply_markup=get_regions_keyboard())
         return
-    await state.update_data(region=REGIONS[message.text], region_name=message.text)
+    region_code = REGIONS[message.text]
+    await state.update_data(region=region_code, region_name=message.text)
+    await state.set_state(KochmasMulkSellStates.choosing_district)
+    await message.answer(
+        f"🏘️ <b>Qaysi tumanda joylashgan?</b>\n\n"
+        f"Tumanni tanlang yoki o'tkazib yuboring:",
+        reply_markup=get_districts_keyboard(region_code), parse_mode="HTML"
+    )
+
+
+@router.message(KochmasMulkSellStates.choosing_district)
+async def process_district_sell(message: Message, state: FSMContext):
+    if message.text == "🔙 Orqaga":
+        data = await state.get_data()
+        await state.set_state(KochmasMulkSellStates.choosing_district)
+        await message.answer(
+            "🏘️ Tumanni tanlang:",
+            reply_markup=get_districts_keyboard(data.get('region', ''))
+        )
+        return
+    data = await state.get_data()
+    region_code = data.get('region', '')
+    districts = DISTRICTS.get(region_code, [])
+
+    if message.text == "⏭ O'tkazib yuborish":
+        await state.update_data(district=None, district_name=None)
+    elif message.text in districts:
+        await state.update_data(district=message.text, district_name=message.text)
+    else:
+        await message.answer(
+            "❌ Iltimos, tugmalardan birini tanlang!",
+            reply_markup=get_districts_keyboard(region_code)
+        )
+        return
+
     await state.set_state(KochmasMulkSellStates.choosing_property_type)
     await message.answer(
         "🏠 <b>Mulk turini tanlang:</b>",
@@ -416,6 +450,7 @@ async def process_confirmation(message: Message, state: FSMContext):
             'full_name':     data['full_name'],
             'phone':         ADMIN_PHONE,
             'region':        data['region'],
+            'district':      data.get('district'),
             'property_type': data['property_type'],
             'action_type':   'sell',
             'area':          data.get('area'),
@@ -460,6 +495,7 @@ async def _send_to_admin(bot, data: dict, object_id: int, user_phone: str, user_
     text += "🏠 <b>MULK:</b>\n"
     text += f"├─ <b>Tur:</b> {data.get('property_type_name')}\n"
     text += f"├─ <b>Viloyat:</b> {data.get('region_name')}\n"
+    text += f"├─ <b>Tuman:</b> {data.get('district_name') or '—'}\n"
     text += f"├─ <b>Maydon:</b> {format_area(data.get('area', 0))}\n"
     if data.get('rooms'):
         text += f"├─ <b>Xonalar:</b> {data.get('rooms')} ta\n"

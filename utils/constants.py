@@ -23,6 +23,84 @@ REGIONS = {
     "🏛️ Qoraqalpog'iston": "karakalpakstan"
 }
 
+
+# ============================================================================
+# TUMANLAR (viloyat kodi → tumanlar ro'yxati)
+# ============================================================================
+DISTRICTS = {
+    "tashkent_city": [
+        "Mirobod", "Mirzo Ulug'bek", "Yakkasaroy", "Olmazor", "Yunusobod",
+        "Chilonzor", "Uchtepa", "Sirg'ali", "Yashnobod", "Shayxontohur",
+        "Bektimir", "Yangihayot",
+    ],
+    "tashkent_region": [
+        "Olmaliq sh", "Angren sh", "Ohangaron", "Oqqo'rg'on", "Bekobod",
+        "Bo'ka", "Bo'stonliq", "Zangiota", "Qibray", "Parkent", "Piskent",
+        "Quyichirchiq", "O'rtachirchiq", "Chirchiq sh", "Chinoz",
+        "Yuqorichirchiq", "Yangiyo'l", "Toshkent t", "Nurafshon sh",
+    ],
+    "samarkand": [
+        "Samarqand sh", "Samarqand t", "Bulung'ur", "Jomboy", "Pastdarg'om",
+        "Ishtixon", "Kattaqo'rg'on sh", "Nurobod", "Oqdaryo", "Narpay",
+        "Payariq", "Kattaqo'rg'on t", "Paxtachi", "Tayloq", "Urgut", "Qo'shrabot",
+    ],
+    "fergana": [
+        "Marg'ilon sh", "Farg'ona sh", "Quvasoy sh", "Qo'qon sh", "Bag'dod",
+        "Beshariq", "Dang'ara", "Yozyovon", "Oltiariq", "Qo'shtepa", "Rishton",
+        "So'x", "Toshloq", "Uchko'prik", "Farg'ona t", "Furqat",
+        "O'zbekiston t", "Quva", "Buvayda",
+    ],
+    "andijan": [
+        "Andijon sh", "Andijon t", "Asaka", "Baliqchi", "Bo'ston", "Buloqboshi",
+        "Jalaquduq", "Izboskan", "Qo'rg'ontepa", "Marhamat", "Oltinko'l",
+        "Paxtaobod", "Ulug'nor", "Xo'jabod", "Shahrixon", "Xonobod sh",
+    ],
+    "namangan": [
+        "Namangan sh", "Kosonsoy", "Norin", "Uchqo'rg'on", "Chartoq", "Chust",
+        "To'raqo'rg'on", "Pop", "Mingbuloq", "Namangan t", "Uychi",
+        "Yangiqo'rg'on", "Davlatobod", "Yangi Namangan",
+    ],
+    "bukhara": [
+        "Buxoro sh", "Romitan", "Kogon t", "G'ijduvon", "Buxoro t", "Jondor",
+        "Vobkent", "Peshko'", "Shofirkon", "Qorako'l", "Olot",
+        "Qorovulbozor", "Kogon sh",
+    ],
+    "kashkadarya": [
+        "Qarshi sh", "Shahrizabz sh", "Shahrizabz t", "Kitob", "Yakkabog'",
+        "Chiroqchi", "Qamashi", "G'uzor", "Qarshi t", "Nishon", "Koson",
+        "Kasbi", "Mirishkor", "Muborak", "Dehqonobod", "Ko'kdala",
+    ],
+    "surkhandarya": [
+        "Termiz sh", "Oltinsoy", "Angor", "Bandixon", "Boysun", "Muzrabot",
+        "Denov", "Jarqo'rg'on", "Qumqo'rg'on", "Qiziriq", "Sariosiyo",
+        "Termiz t", "Uzun", "Sherobod", "Sho'rchi",
+    ],
+    "jizzakh": [
+        "Jizzax sh", "Sharof Rashidov", "G'allaorol", "Baxmal", "Paxtakor",
+        "Zafarobot", "Do'stlik", "Arnasoy", "Mirzacho'l", "Zarbdor",
+        "Zomin", "Forish", "Yangiobod",
+    ],
+    "sirdarya": [
+        "Guliston sh", "Yangiyer sh", "Shirin sh", "Oqoltin", "Boyovut",
+        "Guliston t", "Sirdaryo t", "Sayxunobod", "Xovos", "Mirzaobod", "Sardoba",
+    ],
+    "navoiy": [
+        "Navoiy sh", "Zarafshon sh", "Karmana", "Qiziltepa", "Konimex",
+        "Navbahor", "Nurota", "Xatirchi", "Tomdi", "Uchquduq", "Go'zg'on sh",
+    ],
+    "khorezm": [
+        "Urganch sh", "Xiva sh", "Urganch t", "Xiva t", "Xonqa", "Shovot",
+        "Bog'dot", "Yangiariq", "Yangibozor", "Gurlan",
+        "Qo'shko'prik", "Xazorasp", "Tuproqqal'a",
+    ],
+    "karakalpakstan": [
+        "Nukus sh", "Nukus t", "Kegeyli", "Chimboy", "Qorao'zak",
+        "Taxtako'pir", "Xo'jayli", "Shumanay", "Qonliko'l", "Taxiatosh",
+        "Qo'ng'irot", "Mo'ynoq", "Amudaryo", "To'rtko'l",
+        "Ellikqal'a", "Beruniy", "Bo'zatov",
+    ],
+}
+
 # ============================================================================
 # KO'CHMAS MULK TURLARI
 # ============================================================================
