@@ -3,7 +3,8 @@ FSM States - MUKAMMAL VERSIYA
 Barcha states qo'shilgan
 """
 from aiogram.fsm.state import State, StatesGroup
-
+ 
+ 
 class KochmasMulkSellStates(StatesGroup):
     choosing_region       = State()
     choosing_district     = State()
@@ -20,14 +21,14 @@ class KochmasMulkSellStates(StatesGroup):
     uploading_photo       = State()
     uploading_video       = State()
     confirmation          = State()
-
-
+ 
+ 
 class KochmasMulkBuyStates(StatesGroup):
     choosing_region       = State()
     choosing_district     = State()
     choosing_property_type = State()
-
-
+ 
+ 
 class IjaraRentOutStates(StatesGroup):
     choosing_region       = State()
     choosing_district     = State()
@@ -45,12 +46,13 @@ class IjaraRentOutStates(StatesGroup):
     uploading_photo       = State()
     uploading_video       = State()
     confirmation          = State()
-
-
+ 
+ 
 class IjaraRentInStates(StatesGroup):
     choosing_region       = State()
     choosing_district     = State()
     choosing_property_type = State()
+ 
 
 # ============================================================================
 # ARIZA STATES

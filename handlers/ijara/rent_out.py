@@ -64,7 +64,10 @@ async def process_region(message: Message, state: FSMContext):
 async def process_district_rent_out(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
         await state.set_state(IjaraRentOutStates.choosing_region)
-        await message.answer("Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+        await message.answer(
+            "🗺️ Viloyatni tanlang:",
+            reply_markup=get_regions_keyboard()
+        )
         return
     data = await state.get_data()
     region_code = data.get('region', '')
@@ -91,8 +94,12 @@ async def process_district_rent_out(message: Message, state: FSMContext):
 @router.message(IjaraRentOutStates.choosing_property_type)
 async def process_property_type(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
-        await state.set_state(IjaraRentOutStates.choosing_region)
-        await message.answer("Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+        data = await state.get_data()
+        await state.set_state(IjaraRentOutStates.choosing_district)
+        await message.answer(
+            "🏘️ Tumanni tanlang:",
+            reply_markup=get_districts_keyboard(data.get('region', ''))
+        )
         return
     if message.text not in RENTAL_TYPES:
         await message.answer("❌ Tugmalardan tanlang!", reply_markup=get_rental_types_keyboard())

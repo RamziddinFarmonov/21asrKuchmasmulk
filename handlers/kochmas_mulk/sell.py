@@ -63,11 +63,10 @@ async def process_region(message: Message, state: FSMContext):
 @router.message(KochmasMulkSellStates.choosing_district)
 async def process_district_sell(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
-        data = await state.get_data()
-        await state.set_state(KochmasMulkSellStates.choosing_district)
+        await state.set_state(KochmasMulkSellStates.choosing_region)
         await message.answer(
-            "🏘️ Tumanni tanlang:",
-            reply_markup=get_districts_keyboard(data.get('region', ''))
+            "🗺️ Viloyatni tanlang:",
+            reply_markup=get_regions_keyboard()
         )
         return
     data = await state.get_data()
@@ -95,8 +94,12 @@ async def process_district_sell(message: Message, state: FSMContext):
 @router.message(KochmasMulkSellStates.choosing_property_type)
 async def process_property_type(message: Message, state: FSMContext):
     if message.text == "🔙 Orqaga":
-        await state.set_state(KochmasMulkSellStates.choosing_region)
-        await message.answer("Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+        data = await state.get_data()
+        await state.set_state(KochmasMulkSellStates.choosing_district)
+        await message.answer(
+            "🏘️ Tumanni tanlang:",
+            reply_markup=get_districts_keyboard(data.get('region', ''))
+        )
         return
     if message.text not in PROPERTY_TYPES:
         await message.answer("❌ Iltimos, tugmalardan birini tanlang!", reply_markup=get_property_types_keyboard())
