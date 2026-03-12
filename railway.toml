@@ -1,6 +1,5 @@
 [build]
-builder = "nixpacks"
+builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python main.py"
-restartPolicyType = "always"
