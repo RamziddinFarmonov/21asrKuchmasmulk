@@ -1,15 +1,14 @@
-# Asosiy kutubxonalar (binary wheels)
+# Python 3.13 bilan to'liq mos versiyalar
 aiogram==3.7.0
 aiohttp==3.9.5
 python-dotenv==1.0.1
-
-# Pydantic - pre-built binary (Rust kerak emas)
-pydantic==2.7.0
-
-# Typing extensions
-typing-extensions==4.11.0
-
-# Qo'shimcha (agar kerak bo'lsa)
+ 
+# pydantic - Python 3.13 uchun yangilangan versiyalar
+pydantic==2.7.4
+pydantic-core==2.18.4
+ 
+# Qo'shimcha kutubxonalar
+typing-extensions==4.12.2
 aiosignal==1.3.1
 attrs==23.2.0
 certifi==2024.2.2
@@ -19,3 +18,4 @@ idna==3.7
 magic-filter==1.0.12
 multidict==6.0.5
 yarl==1.9.4
+aiofiles==23.2.1
