@@ -92,20 +92,21 @@ class DatabaseManager:
                 )
             """)
             
-            # Migration: mavjud jadvallarga district ustuni qo'shish (agar yo'q bo'lsa)
-            try:
-                cursor.execute("ALTER TABLE kochmas_mulk ADD COLUMN district TEXT")
-                logger.info("✅ Migration: kochmas_mulk.district ustuni qo'shildi")
-            except Exception:
-                pass  # Ustun allaqachon mavjud
-            try:
-                cursor.execute("ALTER TABLE ijara ADD COLUMN district TEXT")
-                logger.info("✅ Migration: ijara.district ustuni qo'shildi")
-            except Exception:
-                pass  # Ustun allaqachon mavjud
-
             conn.commit()
             logger.info("✅ Database initialized successfully")
+            # Migration: mavjud jadvalga district ustuni qo'shish
+            self._migrate_add_district(conn)
+
+    def _migrate_add_district(self, conn):
+        """District ustunini mavjud jadvalga qo'shish (migration)"""
+        cursor = conn.cursor()
+        for table in ('kochmas_mulk', 'ijara'):
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN district TEXT")
+                conn.commit()
+                logger.info(f"✅ Migration: {table}.district ustuni qo'shildi")
+            except Exception:
+                pass  # Ustun allaqachon mavjud
     
     # ============================================================================
     # KO'CHMAS MULK METODLARI
@@ -163,11 +164,11 @@ class DatabaseManager:
             if region:
                 query += " AND region = ?"
                 params.append(region)
-
+            
             if district:
                 query += " AND district = ?"
                 params.append(district)
-
+            
             if property_type:
                 query += " AND property_type = ?"
                 params.append(property_type)
@@ -261,11 +262,11 @@ class DatabaseManager:
             if region:
                 query += " AND region = ?"
                 params.append(region)
-
+            
             if district:
                 query += " AND district = ?"
                 params.append(district)
-
+            
             if property_type:
                 query += " AND property_type = ?"
                 params.append(property_type)
@@ -393,6 +394,14 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error deactivating object: {e}")
             return False
+
+    def delete_kochmas_mulk(self, object_id: int) -> bool:
+        """Ko'chmas mulk e'lonini o'chirish (deaktivatsiya)"""
+        return self.deactivate_object('kochmas_mulk', object_id)
+
+    def delete_ijara(self, object_id: int) -> bool:
+        """Ijara e'lonini o'chirish (deaktivatsiya)"""
+        return self.deactivate_object('ijara', object_id)
     
     def get_statistics(self) -> Dict[str, int]:
         """Umumiy statistika"""

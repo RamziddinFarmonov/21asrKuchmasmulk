@@ -32,12 +32,12 @@ from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 
 from utils.constants import (
-    REGIONS, PROPERTY_TYPES, RENTAL_TYPES, RENTAL_PERIODS,
+    REGIONS, DISTRICTS, PROPERTY_TYPES, RENTAL_TYPES, RENTAL_PERIODS,
     format_price, format_area,
     get_region_name_by_code, get_property_type_name_by_code
 )
 from utils.keyboards import (
-    get_regions_keyboard, get_property_types_keyboard,
+    get_regions_keyboard, get_districts_keyboard, get_property_types_keyboard,
     get_rental_types_keyboard, get_rental_period_keyboard,
 )
 
@@ -46,46 +46,19 @@ router = Router()
 # ── DB yordamchi funksiyalar (admin uchun) ───────────────────────────────────
 
 def _db_get_all_kochmas(db, limit: int = 100) -> list:
-    """Barcha Ko'chmas mulk e'lonlarini olish (region/type filtrsiz)"""
-    from utils.constants import REGIONS, PROPERTY_TYPES
-    objects, seen = [], set()
-    for region_code in list(REGIONS.values()):
-        for prop_code in list(PROPERTY_TYPES.values()):
-            try:
-                chunk = db.get_kochmas_mulk_list(
-                    region=region_code,
-                    property_type=prop_code,
-                    action_type='sell',
-                    limit=limit
-                ) or []
-                for obj in chunk:
-                    if obj['id'] not in seen:
-                        seen.add(obj['id'])
-                        objects.append(obj)
-            except Exception:
-                pass
-    return objects[:limit]
+    """Barcha Ko'chmas mulk e'lonlarini olish"""
+    try:
+        return db.get_all_kochmas(limit=limit)
+    except Exception:
+        return []
 
 
 def _db_get_all_ijara(db, limit: int = 100) -> list:
-    """Barcha Ijara e'lonlarini olish (region/type filtrsiz)"""
-    from utils.constants import REGIONS, RENTAL_TYPES
-    objects, seen = [], set()
-    for region_code in list(REGIONS.values()):
-        for prop_code in list(RENTAL_TYPES.values()):
-            try:
-                chunk = db.get_ijara_list(
-                    region=region_code,
-                    property_type=prop_code,
-                    action_type='rent_out'
-                ) or []
-                for obj in chunk:
-                    if obj['id'] not in seen:
-                        seen.add(obj['id'])
-                        objects.append(obj)
-            except Exception:
-                pass
-    return objects[:limit]
+    """Barcha Ijara e'lonlarini olish"""
+    try:
+        return db.get_all_ijara(limit=limit)
+    except Exception:
+        return []
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +85,7 @@ def is_admin(user_id: int) -> bool:
 
 class AdminAddKochmas(StatesGroup):
     choosing_region        = State()
+    choosing_district      = State()
     choosing_property_type = State()
     entering_full_name     = State()
     entering_phone         = State()
@@ -129,6 +103,7 @@ class AdminAddKochmas(StatesGroup):
 
 class AdminAddIjara(StatesGroup):
     choosing_region        = State()
+    choosing_district      = State()
     choosing_property_type = State()
     entering_full_name     = State()
     entering_phone         = State()
@@ -345,6 +320,7 @@ async def admin_view_kochmas(callback: CallbackQuery):
     text = (
         f"🏠 <b>#{obj['id']} — {get_property_type_name_by_code(obj.get('property_type', ''))}</b>\n\n"
         f"🗺️ {get_region_name_by_code(obj.get('region', ''))}\n"
+        f"🏘️ {obj.get('district') or '—'}\n"
         f"📐 {format_area(obj.get('area', 0))}\n"
     )
     if obj.get('rooms'):
@@ -516,6 +492,32 @@ async def _ak_region(message: Message, state: FSMContext):
     if message.text not in REGIONS:
         return await message.answer("❌ Tugmadan tanlang!", reply_markup=get_regions_keyboard())
     await state.update_data(region=REGIONS[message.text], region_name=message.text)
+    await state.set_state(AdminAddKochmas.choosing_district)
+    await message.answer(
+        "🏘️ <b>Tumanni tanlang (ixtiyoriy):</b>",
+        reply_markup=get_districts_keyboard(REGIONS[message.text]), parse_mode="HTML"
+    )
+
+
+@router.message(AdminAddKochmas.choosing_district)
+async def _ak_district(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    if message.text == "❌ Bekor qilish":
+        await state.clear()
+        return await message.answer("Bekor.", reply_markup=get_admin_kochmas_menu())
+    if message.text == "🔙 Orqaga":
+        await state.set_state(AdminAddKochmas.choosing_region)
+        return await message.answer("🗺️ Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+    data = await state.get_data()
+    region_code = data.get('region', '')
+    districts = DISTRICTS.get(region_code, [])
+    if message.text == "⏭ O'tkazib yuborish":
+        await state.update_data(district=None, district_name=None)
+    elif message.text in districts:
+        await state.update_data(district=message.text, district_name=message.text)
+    else:
+        return await message.answer("❌ Tugmadan tanlang!", reply_markup=get_districts_keyboard(region_code))
     await state.set_state(AdminAddKochmas.choosing_property_type)
     await message.answer("🏠 <b>Mulk turi:</b>", reply_markup=get_property_types_keyboard(), parse_mode="HTML")
 
@@ -736,6 +738,7 @@ async def _ak_show_confirm(message: Message, state: FSMContext):
     text = (
         "📋 <b>YANGI E'LON — Ko'chmas Mulk</b>\n\n"
         f"🗺️ {data.get('region_name')}\n"
+        f"🏘️ {data.get('district_name') or '—'}\n"
         f"🏠 {data.get('property_type_name')}\n"
         f"👤 {data.get('full_name')} | {data.get('phone')}\n"
         f"📐 {format_area(data.get('area', 0))}\n"
@@ -772,6 +775,7 @@ async def _ak_confirm(message: Message, state: FSMContext):
             'full_name':     data.get('full_name', ''),
             'phone':         data.get('phone', ''),
             'region':        data['region'],
+            'district':      data.get('district'),
             'property_type': data['property_type'],
             'action_type':   'sell',
             'area':          data.get('area'),
@@ -848,6 +852,7 @@ async def admin_view_ijara(callback: CallbackQuery):
     text = (
         f"📋 <b>#{obj['id']} — {get_property_type_name_by_code(obj.get('property_type', ''))} (Ijara)</b>\n\n"
         f"🗺️ {get_region_name_by_code(obj.get('region', ''))}\n"
+        f"🏘️ {obj.get('district') or '—'}\n"
         f"📐 {format_area(obj.get('area', 0))}\n"
     )
     if obj.get('rooms'):
@@ -1017,6 +1022,32 @@ async def _ai_region(message: Message, state: FSMContext):
     if message.text not in REGIONS:
         return await message.answer("❌ Tugmadan tanlang!", reply_markup=get_regions_keyboard())
     await state.update_data(region=REGIONS[message.text], region_name=message.text)
+    await state.set_state(AdminAddIjara.choosing_district)
+    await message.answer(
+        "🏘️ <b>Tumanni tanlang (ixtiyoriy):</b>",
+        reply_markup=get_districts_keyboard(REGIONS[message.text]), parse_mode="HTML"
+    )
+
+
+@router.message(AdminAddIjara.choosing_district)
+async def _ai_district(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    if message.text == "❌ Bekor qilish":
+        await state.clear()
+        return await message.answer("Bekor.", reply_markup=get_admin_ijara_menu())
+    if message.text == "🔙 Orqaga":
+        await state.set_state(AdminAddIjara.choosing_region)
+        return await message.answer("🗺️ Viloyatni tanlang:", reply_markup=get_regions_keyboard())
+    data = await state.get_data()
+    region_code = data.get('region', '')
+    districts = DISTRICTS.get(region_code, [])
+    if message.text == "⏭ O'tkazib yuborish":
+        await state.update_data(district=None, district_name=None)
+    elif message.text in districts:
+        await state.update_data(district=message.text, district_name=message.text)
+    else:
+        return await message.answer("❌ Tugmadan tanlang!", reply_markup=get_districts_keyboard(region_code))
     await state.set_state(AdminAddIjara.choosing_property_type)
     await message.answer("🏠 <b>Ijara turi:</b>", reply_markup=get_rental_types_keyboard(), parse_mode="HTML")
 
@@ -1251,6 +1282,7 @@ async def _ai_show_confirm(message: Message, state: FSMContext):
     text = (
         "📋 <b>YANGI IJARA E'LONI</b>\n\n"
         f"🗺️ {data.get('region_name')}\n"
+        f"🏘️ {data.get('district_name') or '—'}\n"
         f"🏠 {data.get('property_type_name')}\n"
         f"👤 {data.get('full_name')} | {data.get('phone')}\n"
         f"📐 {format_area(data.get('area', 0))}\n"
@@ -1288,6 +1320,7 @@ async def _ai_confirm(message: Message, state: FSMContext):
             'full_name':         data.get('full_name', ''),
             'phone':             data.get('phone', ''),
             'region':            data['region'],
+            'district':          data.get('district'),
             'property_type':     data['property_type'],
             'action_type':       'rent_out',
             'area':              data.get('area'),
