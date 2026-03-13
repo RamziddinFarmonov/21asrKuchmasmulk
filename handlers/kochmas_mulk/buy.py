@@ -226,11 +226,16 @@ async def callback_view_object(callback: CallbackQuery):
 
 @router.callback_query(F.data == "kochmas_back")
 async def callback_kochmas_back(callback: CallbackQuery):
+    chat_id = callback.message.chat.id
     try:
         await callback.message.delete()
     except Exception:
         pass
-    await callback.message.answer("Ko'chmas mulk bo'limi:", reply_markup=get_kochmas_mulk_menu())
+    await callback.bot.send_message(
+        chat_id=chat_id,
+        text="🏠 Ko'chmas mulk bo'limi:",
+        reply_markup=get_kochmas_mulk_menu()
+    )
     await callback.answer()
 
 

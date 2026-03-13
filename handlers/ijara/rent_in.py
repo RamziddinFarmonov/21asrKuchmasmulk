@@ -220,11 +220,16 @@ async def callback_view_ijara(callback: CallbackQuery):
 
 @router.callback_query(F.data == "ijara_back")
 async def callback_ijara_back(callback: CallbackQuery):
+    chat_id = callback.message.chat.id
     try:
         await callback.message.delete()
     except Exception:
         pass
-    await callback.message.answer("Ijara bo'limi:", reply_markup=get_ijara_menu())
+    await callback.bot.send_message(
+        chat_id=chat_id,
+        text="📋 Ijara bo'limi:",
+        reply_markup=get_ijara_menu()
+    )
     await callback.answer()
 
 

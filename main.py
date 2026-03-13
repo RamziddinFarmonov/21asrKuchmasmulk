@@ -54,7 +54,7 @@ dp  = Dispatcher(storage=MemoryStorage())
 
 def _include_routers():
     # ── Admin ──────────────────────────────────────────────────────────────
-    from handlers.admin.admin_panel import router as admin_router
+    from handlers.admin import admin_router
     dp.include_router(admin_router)
 
     # ── Common (handlers/common.py yoki root common.py) ───────────────────
