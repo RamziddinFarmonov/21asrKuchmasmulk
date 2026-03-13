@@ -122,7 +122,7 @@ def get_lot_detail_keyboard(
     # Saytga havola
     builder.button(
         text="🌐 E-auksion.uz da ko'rish",
-        url=f"https://e-auksion.uz/lot/{lot.id}"
+        url=f"https://e-auksion.uz/lot-view?lot_id={lot.id}"
     )
 
     # Orqaga — lotlar ro'yxatiga qaytish (viloyat/tuman filtri saqlanadi)
