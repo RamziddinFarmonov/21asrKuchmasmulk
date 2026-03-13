@@ -15,4 +15,7 @@ async def show_ijara_menu(message: Message, state: FSMContext):
         "Mulk ijaraga berish yoki olishingiz mumkin.",
         reply_markup=get_ijara_menu(),
         parse_mode="HTML"
+
+
+        #finish
     )
